@@ -172,3 +172,12 @@
 - 新闸门 `scripts/check-bottom-lock.cjs`：4 场景（贴底回锁 / 滚开不拽人 / **反跑 stub 复现漏锁** /
   恢复复锁），反跑证明非空。评估文档里「需要测量层兜底」的缺口就此闭合。
 - 详见 [round-164](../rounds/round-164-bottom-lock-determinism.md)。
+
+## 十一、批 3c 已落地（round-165）—— 批 3 三步走完成
+
+- §五 表里 3c 的两个前置（必解 1/2）已由 3a/3b 消解；「需实测高度分布」的解法不是
+  估得更准，而是**换高度来源**：round-164 的 RO 兼任测量层，hot 块高度来自实测缓存，
+  未测块强制入窗 ⇒ spacer 求和只含实测值 ⇒ scrollHeight 守恒（±2px 子像素容差）。
+- §四 的「hot 轮可预测性低」结论仍然成立——但窗口化不再依赖预测。
+- 细节、三坑（spacer shrink-0 复踩 / RO 终末事件振荡 / 冷启动）、验证读数见
+  [round-165](../rounds/round-165-hot-turn-windowing.md)；新闸门 `check-hot-window` 6 场景。

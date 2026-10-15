@@ -54,3 +54,4 @@ Return to the [manual test index](../../tests.md).
 | [Attachment-only first message keeps its thread listable](attachment-only-first-message-keeps-thread-listable.md) |
 | [Slow-load hint appears when a large history takes unusually long to open](round-103-slow-load-hint-large-thread.md) — delayed honest hint, round-101 P1 UX guard |
 | [Bottom lock re-engages after late content growth](bottom-lock-after-late-content-growth.md) — ResizeObserver determinism, round-164 |
+| [Hot turn windowing keeps scrollHeight conserved](hot-turn-windowing-scrollheight-conservation.md) — measured-height block windowing, round-165 |

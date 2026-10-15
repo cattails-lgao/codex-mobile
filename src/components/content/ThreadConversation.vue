@@ -42,12 +42,29 @@
         </button>
       </li>
       <template v-for="turn in renderTurns" :key="turn.key">
-      <template v-if="!turn.warm || isWarmTurnRendered(turn.warm.turn)">
+      <!-- 批 3c（round-165）：hot 区顶哨兵 li —— 恒渲染（独立于下方渲染 guard），
+           顶边 = warm 区底界（3b recomputeWarmWindow 的锚，位值与旧「首个 li.conversation-turn
+           顶边」完全一致），也是 hot 窗顶占位的挂点前身。h-0 ⇒ 只贡献一个 flex gap。 -->
+      <li
+        v-if="turn.warm === undefined && turn.key === hotSentinelKey"
+        aria-hidden="true"
+        class="conversation-hot-anchor"
+      />
+      <!-- 批 3c：hot 窗顶占位 li —— 补回被跳过的上方 hot 块高度
+           （公式 H = Σh + (k−1)·g，见 hotTurnWindow.ts computeHotSpacers）。 -->
+      <li
+        v-if="turn.warm === undefined && turn.key === hotFirstRenderedKey && hotTopSpacerPx > 0"
+        aria-hidden="true"
+        class="conversation-hot-spacer-top"
+        :style="{ height: `${hotTopSpacerPx}px` }"
+      />
+      <template v-if="turn.warm ? isWarmTurnRendered(turn.warm.turn) : isHotTurnRendered(turn.key)">
         <li
           v-if="turn.timeDividerLabel"
           class="conversation-item conversation-item-time-divider"
           data-role="system"
           data-message-type="timeDivider"
+          :data-hot-block="turn.key"
           :style="warmFirstLiStyle(turn, true)"
         >
           <TimeDivider :label="turn.timeDividerLabel" />
@@ -58,6 +75,7 @@
           class="conversation-item conversation-item-model-switch"
           data-role="system"
           data-message-type="modelSwitch"
+          :data-hot-block="turn.key"
           :style="warmFirstLiStyle(turn, !turn.timeDividerLabel && dividerIndex === 0)"
         >
           <ModelSwitchDivider :from="divider.from" :to="divider.to" />
@@ -525,6 +543,7 @@
           class="conversation-item conversation-item-model-switch"
           data-role="system"
           data-message-type="modelSwitch"
+          :data-hot-block="turn.key"
         >
           <ModelSwitchDivider :from="divider.from" :to="divider.to" />
         </li>
@@ -535,6 +554,13 @@
           class="conversation-warm-spacer-bottom"
           :style="{ height: `${warmBottomSpacerPx}px` }"
           aria-hidden="true"
+        />
+        <!-- 批 3c（round-165）：hot 窗底占位 li —— 补回被跳过的下方 hot 块高度。 -->
+        <li
+          v-if="turn.warm === undefined && turn.key === hotLastRenderedKey && hotBottomSpacerPx > 0"
+          aria-hidden="true"
+          class="conversation-hot-spacer-bottom"
+          :style="{ height: `${hotBottomSpacerPx}px` }"
         />
       </template>
       </template>
@@ -678,6 +704,11 @@ import {
   type WarmBlockSpec,
   type WarmWindowPlan,
 } from '../../utils/warmTurnWindow'
+import {
+  planHotWindow,
+  type HotBlockSpec,
+  type HotWindowPlan,
+} from '../../utils/hotTurnWindow'
 import {
   buildTurnGroups,
   buildTurnRenderGroups,
@@ -1297,12 +1328,21 @@ function jumpToQuestion(turn: number): void {
     }
     next = warmLayerWithExpandedTurn(next, props.activeThreadId, turn, true)
     warmLayerState.value = next
+  } else {
+    // 批 3c：hot 区目标轮强制入窗（目标轮可能已被窗口化跳过 ⇒ 锚点不在 DOM）。
+    const group = turnGroups.value[turn]
+    if (group) {
+      const next = new Set(forcedHotTurnKeys.value)
+      next.add(`turn-${group.userItem.id}`)
+      forcedHotTurnKeys.value = next
+    }
   }
   autoFollowOutput.value = false
   // 批 3b：目标轮刚被展开 ⇒ 依赖「展开块强制入窗」才会在 DOM 里。窗口重算走的是
   // watch → nextTick → rAF 的异步链，可能晚于下面这个 nextTick ⇒ 在此同步重算一次，
   // 让本次 nextTick 渲染出的 DOM 已包含目标轮（重复计算幂等，rAF 链随后照常收敛）。
   recomputeWarmWindow()
+  recomputeHotWindow()
   void nextTick().then(() => {
     const container = conversationListRef.value
     const el = document.getElementById(questionAnchorId(turn))
@@ -1510,6 +1550,7 @@ function scheduleWarmWindowRecompute(): void {
   warmWindowFrame = requestAnimationFrame(() => {
     warmWindowFrame = 0
     recomputeWarmWindow()
+    recomputeHotWindow()
   })
 }
 
@@ -1520,9 +1561,11 @@ function recomputeWarmWindow(): void {
     warmWindowPlan.value = null
     return
   }
-  // 实时锚：热区首个轮次根 li。warm 区非空 ⇒ hot 区必有 ≥1 轮 ⇒ 锚必然存在；
-  // 若真的查不到（极端时序），退回全量渲染（plan = null）比猜一个位置安全。
-  const hotAnchor = container.querySelector('li.conversation-turn')
+  // 实时锚：批 3c 起用「hot 区顶哨兵 li」（恒渲染，顶边位值与旧锚——首个
+  // li.conversation-turn 顶边——完全一致；hot 块被窗口跳过后旧锚会失真）。
+  // 极端时序下哨兵缺失则退回旧锚；再查不到就退回全量渲染（plan = null）。
+  const hotAnchor = container.querySelector('.conversation-hot-anchor')
+    ?? container.querySelector('li.conversation-turn')
   if (!hotAnchor) {
     warmWindowPlan.value = null
     return
@@ -1547,6 +1590,191 @@ watch(
   [warmBlockSpecs, hasColdTurns, hasMoreAbove],
   () => {
     // 等 DOM 把新增/移除的块落盘后再量锚，否则读到旧几何。
+    void nextTick(scheduleWarmWindowRecompute)
+  },
+)
+
+// -----------------------------------------------------------------------
+// 批 3c（round-165）：hot 轮窗口化。机制与 3b 同构（块窗口 + 占位补高），
+// 差异在高度来源：hot 块高度**不可预估** ⇒ 来自 ResizeObserver 实测缓存
+// （round-164 的内容观察器兼任测量层，onContentResize → measureHotBlocks）。
+// 要点：
+//  · 未测块强制入窗（真实 DOM）⇒ spacer 求和只含实测值 ⇒ scrollHeight 守恒；
+//  · 缓存 key = turn.key = `turn-<首条 user 消息 id>`（跨追加稳定）；
+//    失效：线程切换、容器宽度变化、待载媒体（img 未 complete 时不缓存该块）；
+//  · hot 区底边 = bottomAnchorRef 实时锚（底锚恒在 DOM），hot 区顶界 = 哨兵 li
+//    （恒渲染，顶边位值与 3b 旧锚完全一致 ⇒ recomputeWarmWindow 改用它）；
+//  · jumpToQuestion 的目标轮强制入窗 ⇒ getElementById 语义原样保留。
+// -----------------------------------------------------------------------
+const HOT_WINDOW_OVERSCAN_PX = 800
+
+const hotWindowPlan = ref<HotWindowPlan | null>(null)
+/** hot 块高度缓存（px）。value 用整体替换触发 specs 重算。 */
+const hotHeightCache = ref<Map<string, number>>(new Map())
+/** 跳转目标强制入窗集合（jumpToQuestion 写入）。 */
+const forcedHotTurnKeys = ref<Set<string>>(new Set())
+
+const hotBlockSpecs = computed<HotBlockSpec[]>(() =>
+  renderTurns.value
+    .filter((turn) => turn.warm === undefined)
+    .map((turn) => ({
+      key: turn.key,
+      measuredHeightPx: hotHeightCache.value.get(turn.key),
+    })),
+)
+
+/** 首个 hot 块 key（哨兵 li 与占位 li 的挂载判据；与窗口计划无关、恒定）。 */
+const hotSentinelKey = computed(() => hotBlockSpecs.value[0]?.key ?? null)
+
+const hotFirstRenderedKey = computed(() => {
+  const plan = hotWindowPlan.value
+  if (!plan) return null
+  const spec = hotBlockSpecs.value[plan.window.first]
+  return spec ? spec.key : null
+})
+
+const hotLastRenderedKey = computed(() => {
+  const plan = hotWindowPlan.value
+  if (!plan) return null
+  const spec = hotBlockSpecs.value[plan.window.last]
+  return spec ? spec.key : null
+})
+
+const hotTopSpacerPx = computed(() => hotWindowPlan.value?.spacers.topSpacerPx ?? 0)
+const hotBottomSpacerPx = computed(() => hotWindowPlan.value?.spacers.bottomSpacerPx ?? 0)
+
+/** 窗口内 + 强制入窗的 hot 块 key 集合；plan 为 null ⇒ null = 全量渲染。 */
+const hotRenderedKeys = computed<Set<string> | null>(() => {
+  const plan = hotWindowPlan.value
+  if (!plan) return null
+  const set = new Set<string>(forcedHotTurnKeys.value)
+  for (let i = plan.window.first; i <= plan.window.last; i += 1) {
+    const spec = hotBlockSpecs.value[i]
+    if (spec) set.add(spec.key)
+  }
+  return set
+})
+
+/** hot 块是否渲染；plan 为 null（无 hot 区 / 观察器降级未测出任何块）⇒ 全量。 */
+function isHotTurnRendered(key: string): boolean {
+  const rendered = hotRenderedKeys.value
+  return rendered === null || rendered.has(key)
+}
+
+function recomputeHotWindow(): void {
+  const container = conversationListRef.value
+  const anchorEl = bottomAnchorRef.value
+  const specs = hotBlockSpecs.value
+  if (!container || !anchorEl || specs.length === 0) {
+    hotWindowPlan.value = null
+    return
+  }
+  const listRect = container.getBoundingClientRect()
+  const anchorRect = anchorEl.getBoundingClientRect()
+  const computedGap = Number.parseFloat(window.getComputedStyle(container).rowGap)
+  const gapPx = Number.isFinite(computedGap) && computedGap > 0 ? computedGap : 12
+  // hot 区底边 = 底锚顶边 − gap（gap 属于末块与底锚交界两侧中底锚侧之前的间隙，
+  // 与 spacer 公式的约定一致：占位 li 到底锚之间恰好一个 gap）。
+  const hotBottomScrollY = anchorRect.top - listRect.top + container.scrollTop - gapPx
+  hotWindowPlan.value = planHotWindow({
+    specs,
+    gapPx,
+    viewportBottomDistancePx:
+      hotBottomScrollY - (container.scrollTop + container.clientHeight),
+    viewportHeightPx: container.clientHeight,
+    overscanPx: HOT_WINDOW_OVERSCAN_PX,
+    forcedKeys: forcedHotTurnKeys.value,
+  })
+}
+
+/**
+ * 实测 hot 块高度：块内全部 li（data-hot-block periphery + data-turn-key 主 li）
+ * 的包围盒高度（首顶 − 末底，分数值，内部 gap 天然包含）。
+ * **待载媒体守卫**：块内存在未 complete 的 <img> ⇒ 返回 null（不缓存），
+ * 该块保持强制入窗，等 RO 在图片落定后重测 —— 消除「晚到媒体引起 sh 跳变」。
+ */
+function measureHotBlock(key: string): number | null {
+  const container = conversationListRef.value
+  if (!container) return null
+  const escaped = CSS.escape(key)
+  const elements = Array.from(
+    container.querySelectorAll(
+      `[data-hot-block="${escaped}"], [data-turn-key="${escaped}"]`,
+    ),
+  )
+  if (elements.length === 0) return null
+  for (const element of elements) {
+    const images = element.querySelectorAll('img')
+    for (const image of images) {
+      if (!image.complete) return null
+    }
+  }
+  let minTop = Number.POSITIVE_INFINITY
+  let maxBottom = Number.NEGATIVE_INFINITY
+  for (const element of elements) {
+    const rect = element.getBoundingClientRect()
+    if (rect.top < minTop) minTop = rect.top
+    if (rect.bottom > maxBottom) maxBottom = rect.bottom
+  }
+  const height = maxBottom - minTop
+  return Number.isFinite(height) && height > 0 ? height : null
+}
+
+let hotMeasureFrame = 0
+let hotMeasurePendingKeys: Set<string> | null = null
+
+/** 批量重测（RO 回调 / 失效后调用；同一 rAF 合并）。 */
+function scheduleHotMeasure(keys: Iterable<string>): void {
+  if (!hotMeasurePendingKeys) hotMeasurePendingKeys = new Set()
+  for (const key of keys) hotMeasurePendingKeys.add(key)
+  if (hotMeasureFrame) return
+  hotMeasureFrame = requestAnimationFrame(() => {
+    hotMeasureFrame = 0
+    const pending = hotMeasurePendingKeys
+    hotMeasurePendingKeys = null
+    if (!pending || pending.size === 0) return
+    const container = conversationListRef.value
+    if (!container) return
+    const next = new Map(hotHeightCache.value)
+    let changed = false
+    for (const key of pending) {
+      // 「不在 DOM」= 无信息（被窗口跳过的块本来就不在 DOM）⇒ 保留缓存。
+      // 只有「在 DOM 但量不出有效高度」才算失效（删除 ⇒ 强制入窗重测）。
+      const escaped = CSS.escape(key)
+      const present = container.querySelector(
+        `[data-hot-block="${escaped}"], [data-turn-key="${escaped}"]`,
+      )
+      if (!present) continue
+      const height = measureHotBlock(key)
+      if (height === null) {
+        if (next.delete(key)) changed = true
+        continue
+      }
+      if (next.get(key) !== height) {
+        next.set(key, height)
+        changed = true
+      }
+    }
+    if (changed) {
+      hotHeightCache.value = next
+      void nextTick(scheduleWarmWindowRecompute)
+    }
+  })
+}
+
+// hot 块集合（含缓存高度）变化 ⇒ DOM 落盘后重算两个窗口；线程切换 ⇒ 高度缓存
+// 与跳转强制集整体失效（key 是消息 id，跨线程可能撞）。
+watch(hotBlockSpecs, () => {
+  void nextTick(scheduleWarmWindowRecompute)
+})
+watch(
+  () => props.activeThreadId,
+  () => {
+    hotHeightCache.value = new Map()
+    forcedHotTurnKeys.value = new Set()
+    hotWindowPlan.value = null
+    // 清缓存后当前窗若已在窗口化态，退回全量渲染（全靠强制入窗）——
+    // 重挂/重渲后 RO 重测，随后自然重新窗口化。
     void nextTick(scheduleWarmWindowRecompute)
   },
 )
@@ -2218,13 +2446,36 @@ function onContentGrowth(): void {
   if (shouldLockToBottom()) scheduleBottomLock(2)
 }
 
+/** 批 3c：RO 回调 —— 先做 hot 块测量（缓存更新），再走锁底。 */
+function onContentResize(entries: ResizeObserverEntry[]): void {
+  const keys: string[] = []
+  for (const entry of entries) {
+    const target = entry.target as HTMLElement
+    // 已脱离文档的元素不再携带有效几何（移除时可能收到终末事件）——忽略，
+    // 否则会拿「不在 DOM」当「高度失效」误删缓存，引发窗口化↔全量振荡。
+    if (!target.isConnected) continue
+    if (target === conversationListRef.value) {
+      // 容器自身（宽度）变化 ⇒ 全部缓存失效（高度随排版宽度变）。
+      if (hotHeightCache.value.size > 0) {
+        hotHeightCache.value = new Map()
+        scheduleHotMeasure(hotBlockSpecs.value.map((spec) => spec.key))
+      }
+      continue
+    }
+    const key = target.dataset.hotBlock ?? target.dataset.turnKey
+    if (key) keys.push(key)
+  }
+  if (keys.length > 0) scheduleHotMeasure(keys)
+  onContentGrowth()
+}
+
 function bindContentGrowthObserver(): void {
   if (contentResizeObserver || contentMutationObserver) return
   if (typeof ResizeObserver === 'undefined' || typeof MutationObserver === 'undefined') return
   const container = conversationListRef.value
   if (!container) return
 
-  contentResizeObserver = new ResizeObserver(onContentGrowth)
+  contentResizeObserver = new ResizeObserver(onContentResize)
   contentResizeObserver.observe(container)
   syncObservedContent()
 
@@ -2379,6 +2630,11 @@ function isVideoMediaUrl(value: string): boolean {
 
 onBeforeUnmount(() => {
   clearRenderCaches()
+  if (hotMeasureFrame) {
+    cancelAnimationFrame(hotMeasureFrame)
+    hotMeasureFrame = 0
+  }
+  hotMeasurePendingKeys = null
   if (conversationScrollFrame) {
     cancelAnimationFrame(conversationScrollFrame)
     conversationScrollFrame = 0
@@ -2613,6 +2869,18 @@ onBeforeUnmount(() => {
 
 .conversation-bottom-anchor {
   @apply h-px;
+}
+
+/* 批 3c：hot 区顶哨兵（0 高，只贡献 flex gap；顶边 = warm 区底界锚）。 */
+.conversation-hot-anchor {
+  @apply h-0;
+}
+
+/* 批 3c：hot 窗占位 li —— 必须 shrink-0：flex-col 滚动容器里，flex 收缩会把
+   高于 min-content 的占位 li 压回 0 高（round-163 warm spacer 同坑，实测复踩）。 */
+.conversation-hot-spacer-top,
+.conversation-hot-spacer-bottom {
+  @apply shrink-0;
 }
 
 .jump-to-latest-button {
