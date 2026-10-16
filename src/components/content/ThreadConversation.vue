@@ -649,6 +649,15 @@
       @toggle-file-list="toggleDiffViewerFileList"
       @close-file-list="closeDiffViewerFileList"
     />
+
+    <!-- round-174：sr-only「Latest response」（对齐桌面端 26.1013 virtualized-turn-list：
+         composer 前的不可见标题；焦点进入其后方区域时升入 Tab 序，聚焦即送至最新回复）。 -->
+    <h4
+      ref="latestResponseHeadingRef"
+      class="sr-only m-0 select-none"
+      :tabindex="latestResponseHeadingTab"
+      @focus="onLatestResponseHeadingFocus"
+    >{{ t('Latest response') }}</h4>
   </section>
   <ConfirmDialog
     :visible="pendingConfirm !== null"
@@ -1018,6 +1027,10 @@ const emit = defineEmits<{
 
 const conversationListRef = ref<HTMLElement | null>(null)
 const bottomAnchorRef = ref<HTMLElement | null>(null)
+// round-174：无障碍「Latest response」——动态 tabindex 的 sr-only 标题（默认 -1 不占
+// Tab 序；焦点进入其后方区域时升 0，前向 Tab 按下瞬间降回 -1，与桌面端同款配对）。
+const latestResponseHeadingRef = ref<HTMLElement | null>(null)
+const latestResponseHeadingTab = ref<-1 | 0>(-1)
 const messageImageDisplay = createMessageImageDisplay({ isVideo: isVideoMediaUrl })
 const {
   modalImageUrl,
@@ -2472,6 +2485,55 @@ function onRejectUnknownRequest(requestId: number): void {
   })
 }
 
+// round-174：sr-only「Latest response」的焦点导航。
+// 选择器优先序：最后一条 assistant final 块（item 级 .conversation-item-final →
+// section 级 .conversation-turn-final）→ 最后一个 turn 根 li → null（保持 h4 焦点）。
+function pickLatestResponseAnchor(container: HTMLElement | null): HTMLElement | null {
+  if (!container) return null
+  const finalItems = container.querySelectorAll<HTMLElement>('.conversation-item-final')
+  if (finalItems.length > 0) return finalItems[finalItems.length - 1]
+  const finalSections = container.querySelectorAll<HTMLElement>('.conversation-turn-final')
+  if (finalSections.length > 0) return finalSections[finalSections.length - 1]
+  const turnRoots = container.querySelectorAll<HTMLElement>('li.conversation-turn')
+  return turnRoots.length > 0 ? turnRoots[turnRoots.length - 1] : null
+}
+
+function onLatestResponseHeadingFocus(): void {
+  const target = pickLatestResponseAnchor(conversationListRef.value)
+  if (!target) return
+  // Chromium 实测（tmp/r174-focus-exp.cjs）：聚焦态同步摘 tabindex 会把焦点打回 BODY，
+  // 连下一帧摘都失焦 ⇒ 挂一次性 focusout，焦点离开该块后再恢复 tabindex 原状
+  // （负值不进 Tab 序，只开放编程聚焦；原值存在则还原）。
+  const prevTabindex = target.getAttribute('tabindex')
+  target.setAttribute('tabindex', '-1')
+  target.focus({ preventScroll: true })
+  target.addEventListener(
+    'focusout',
+    () => {
+      if (prevTabindex === null) target.removeAttribute('tabindex')
+      else target.setAttribute('tabindex', prevTabindex)
+    },
+    { once: true },
+  )
+}
+
+// 对齐桌面端（26.1013 virtualized-turn-list）：焦点落到标题后方（composer 一侧）时升 0
+// （shift+Tab 反向可达），前向 Tab 按下的瞬间降回 -1（正向 Tab 流不被插入的标题打断）。
+function onLatestResponseDocKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Tab' && !event.shiftKey && !event.defaultPrevented) {
+    latestResponseHeadingTab.value = -1
+  }
+}
+
+function onLatestResponseDocFocusin(): void {
+  const heading = latestResponseHeadingRef.value
+  const active = typeof document !== 'undefined' ? document.activeElement : null
+  if (!heading || !active || active === heading) return
+  if (heading.compareDocumentPosition(active) & Node.DOCUMENT_POSITION_FOLLOWING) {
+    latestResponseHeadingTab.value = 0
+  }
+}
+
 // round-153（批 3a）：滚动位置的**写入**统一走「距底距离」坐标；容器贴底态即距底 0。
 function setScrollDistanceFromBottom(container: HTMLElement, distancePx: number): void {
   container.scrollTop = getScrollTopForDistanceFromBottomPx(readScrollMetricsPx(container), distancePx)
@@ -2935,6 +2997,18 @@ onMounted(() => {
   scheduleThreadScrollStateRestore()
   window.addEventListener('pagehide', onPageHideFlushScrollState)
   window.addEventListener('visibilitychange', onPageHideFlushScrollState)
+})
+
+// round-174：第二个 onMounted/onBeforeUnmount 对——ui-contract 钉住第一个 onMounted 的
+// 240 字符窗口（须含 scheduleConversationScroll），注册语句不得再挤进那个窗口。
+onMounted(() => {
+  document.addEventListener('keydown', onLatestResponseDocKeydown)
+  document.addEventListener('focusin', onLatestResponseDocFocusin)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', onLatestResponseDocKeydown)
+  document.removeEventListener('focusin', onLatestResponseDocFocusin)
 })
 
 function onConversationScroll(): void {

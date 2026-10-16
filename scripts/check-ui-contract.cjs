@@ -1294,6 +1294,25 @@ check(
   ].join(' / '),
 )
 
+// ------------------------------------------- 无障碍「Latest response」焦点导航（round-174）
+// 对齐桌面端 26.1013 virtualized-turn-list：composer 前的 sr-only h4（动态 tabindex，
+// focusin 升 0 / 前向 Tab keydown 降 -1），聚焦即送至最后 assistant final 块。
+// Chromium 实测（tmp/r174-focus-exp.cjs）：聚焦态摘 tabindex 会失焦 ⇒ 必须 focusout 后再恢复。
+const convSrc174 = fs.readFileSync('src/components/content/ThreadConversation.vue', 'utf8')
+const a11yHeading174 = /<h4\s*\r?\n\s*ref="latestResponseHeadingRef"\s*\r?\n\s*class="sr-only m-0 select-none"\s*\r?\n\s*:tabindex="latestResponseHeadingTab"\s*\r?\n\s*@focus="onLatestResponseHeadingFocus"\s*\r?\n\s*>\{\{ t\('Latest response'\) \}\}<\/h4>/.test(convSrc174)
+const a11yFocus174 = /function onLatestResponseHeadingFocus\(\): void \{[\s\S]{0,400}?pickLatestResponseAnchor\(conversationListRef\.value\)[\s\S]{0,600}?target\.focus\(\{ preventScroll: true \}\)[\s\S]{0,200}?addEventListener\(\s*\r?\n?\s*'focusout'/.test(convSrc174)
+const a11yPairing174 = /function onLatestResponseDocKeydown\(event: KeyboardEvent\): void \{[\s\S]{0,200}?event\.key === 'Tab' && !event\.shiftKey && !event\.defaultPrevented[\s\S]{0,120}?latestResponseHeadingTab\.value = -1/.test(convSrc174)
+  && /heading\.compareDocumentPosition\(active\) & Node\.DOCUMENT_POSITION_FOLLOWING[\s\S]{0,120}?latestResponseHeadingTab\.value = 0/.test(convSrc174)
+check(
+  '无障碍 Latest response：sr-only 标题 + focus 导航 + keydown/focusin 配对（round-174）',
+  a11yHeading174 && a11yFocus174 && a11yPairing174,
+  [
+    `标题=${a11yHeading174 ? 'yes' : 'NO'}`,
+    `focus 导航/focusout 摘除=${a11yFocus174 ? 'yes' : 'NO'}`,
+    `keydown/focusin 配对=${a11yPairing174 ? 'yes' : 'NO'}`,
+  ].join(' / '),
+)
+
 // --------------------------------------------------------------------- 报告
 console.log('UI 契约检查\n')
 for (const r of results) {
