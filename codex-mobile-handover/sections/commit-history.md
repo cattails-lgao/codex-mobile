@@ -450,6 +450,18 @@
 - **坑**：同文档 hash goto 不重载文档（探针每场景带 `?r169s=<n>`）；`thread/turns/list` 同时服务 missing 预检与 revert 水合 ⇒ 探针按 `state.reverted` 动态响应。
 - **批 4 四项全部落地**（#1/#3 round-168、#2/#4 round-169）。详见 [round-169](../rounds/round-169-batch4-inline-edit-and-edit-resend.md)。
 
+## round-175（parity 滞后复核第二轮：分叉 / 能力门控 / 揭示动画，未发布）
+
+**性质**：纯文档取证轮（`src/` 零改动，口径同 round-167）。承接 round-174 复核口径，把剩余疑似滞后的三行全部核掉。
+
+**改判**：① 行 79 分叉 → **打平**——round-168 主路径已是 `thread/fork {beforeTurnId}` 一步截断（主路径同桌面同一次 RPC）；`lastTurnId` 中间路径**有意不做**：本机四版二进制（0.159.0/0.161.0/0.162.0/0.162.1）实测 `ThreadForkParams`（20 元素）恒含 `beforeTurnId`/`lastTurnId`，运行时探测模式下补试 lastTurnId 需对源线程再 fork（孤儿线程）且与降级 revert 同为 2 RPC 上限。② 行 132 能力门控 → **打平（模式）· 规模差距登记**——`capabilityGates.ts`（round-168）已收敛 9 能力单一数据源；方法探测覆盖现有全部能力面，版本维度唯一实例 `instant_interrupt ≥0.159.0` 已在桥侧（`codexCliSupportsInterrupt`）。③ 行 64 流式揭示动画 → **打平（当前版本）**——26.1013 asar 三连搜（`min(3000` / `Math.min(3e3` / `length×5` + turn 列表 chunk 零时长逻辑）证明该动画已被桌面移除，公式属早期版本取证。
+
+**提交**：**本段所在提交**（docs；parity 表 3 行 + 本文件 1307 → 1319 行 + round 文档新增）。
+
+**取证留档**：`tmp/r175-fork-versions.cjs`（四版本 ThreadForkParams）、`tmp/r175-fork-schema.cjs`（0.162.1 互斥错误串）、`tmp/r175-reveal*.cjs`（揭示动画三连搜，全 15171 资产）。
+
+**未闭环**（详见 [round-175 §四](../rounds/round-175-parity-recheck-2-fork-gates-reveal.md)）：二进制结论不外推 0.159.0 以下；行 64 原始出处轮次未留档（以 26.1013 现状为准）；A 域其余行旧行号未逐一复核。
+
 ## round-174（无障碍「Latest response」+ parity 复核五处改判，未发布）
 
 **性质**：小收口轮（`ThreadConversation.vue` +93/−0 全部新增、`scripts/check-ui-contract.cjs` +27、parity 表 5 行改判）。起因：盘点 parity 表剩余「他们更好」行准备打包收尾，真查代码发现**两行判定早已过时**（按钮与时间分隔栏都已落地），随后把同表滚动坐标 / 贴底一并复核 ⇒ 五处改判 + 一处真正的代码缺口（无障碍）一起收口。

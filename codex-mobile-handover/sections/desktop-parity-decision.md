@@ -61,7 +61,7 @@
 | 「滚动到底」按钮 | 有，判据 `距底 > spacerHeight + 24` | **已有 UI**：`jump-to-latest-button`（`ThreadConversation.vue:604-613`，`!autoFollowOutput` 显示），点击 `jumpToLatest` = 贴底 + 恢复跟随 + 4 帧锁底（`:2558`） | **打平**（round-174 复核改判；判据口径不同——桌面按距底读数、我们按 autoFollow 布尔，行为等价：滚离贴底即出现） |
 | 时间分隔 | 跨天 或 间隔 ≥ 30 分钟 | **已有**（round-149）：`timeDividers.ts`（`TIME_DIVIDER_GAP_MS` = 30min，基准取上一条已展示分隔栏）+ `TimeDivider.vue`，接线 `attachTimeDividers` 2 处被 ui-contract 钉死 | **打平**（round-174 复核改判；口径同款） |
 | 右侧导航轨 | `IntersectionObserver` + 层级/书签 | **已有** `QuestionJumpBar.vue`：点轨跳转 + hover 预览 + 距 hover 点渐变波（`ThreadConversation.vue:524`、`jumpToQuestion` `:1223`） | **打平**（上一轮材料误记「无」） |
-| 流式揭示动画 | `min(3000, max(1000, 长度×5))ms` | 无（直接出现） | 他们对（观感）；非必须 |
+| 流式揭示动画 | `min(3000, max(1000, 长度×5))ms`（**早期版本取证**） | 无（直接出现） | **打平（当前版本）**（round-175 复核改判：26.1013 asar 全量复核——turn 列表 chunk（`virtualized-turn-list-8f04484ca276.js`）零动画时长逻辑，全 15171 个资产对 `min(3000`/`Math.min(3e3`/`length×5` 三形态的命中均为无关噪声（vite 依赖映射/KaTeX 字体/mermaid 布局），该公式属早期桌面版本，已从 26.1013 移除 ⇒ 两端行为一致） |
 | 无障碍 | `h4.sr-only`「Latest response」，Tab 直达最新回复 | **（round-174 已收口）**同款 `h4.sr-only` + 动态 tabindex 配对（focusin 升 / 前向 Tab keydown 降）+ 聚焦即送最后 assistant final 块（`focus({preventScroll})`） | **打平**（机制逐项对齐；导航层简化：桌面走可中断的导航状态模块，我们直取最后 final 块，见 rounds/round-174 §四） |
 
 **A 域小结**：**他们赢在几何与滚动，我们赢在语义分层与安全边界。** 而这两件事其实**不冲突**——他们的几何层可以整段搬到我们的 hot 区（见 §四·批 0/批 3）。
@@ -76,7 +76,7 @@
 | 进行中的轮 | 硬 assert 拒绝编辑 | 先 `interrupt` 再回退（`:3388-3390`） | 各有取舍（我们更「能继续」） |
 | 编辑失败兜底 | legacy history 走 `thread/rollback`（旧 RPC） | 服务端已无该轮 ⇒ 本地对齐（`:3435`） | **我们更健壮** |
 | 存档一致性 | —（上游不需要） | round-142：成对清 thinking 存档（`:3460-3469`） | **我们更好** |
-| 分叉 | 三条路径：`beforeTurnId`（需实验能力）→ `lastTurnId` → 全量 fork + 副本 revert | `forkThreadFromTurn`（`useDesktopState.ts:2622`）= **只有最后那条兜底**（`:2654` fork 全量 → `:2689` 副本 revert） | 他们对（少一次往返） |
+| 分叉 | 三条路径：`beforeTurnId`（需实验能力）→ `lastTurnId` → 全量 fork + 副本 revert | **（round-168 已收口）**`forkThreadFromTurn` 优先 `thread/fork {beforeTurnId}` 一步截断（与桌面主路径同款、同一次 RPC），上游静默忽略未知参数时才降级全量 fork + 副本 revert（`threadForkTruncation.ts` 谓词） | **打平**（round-175 复核改判：主路径同为一步 fork。桌面多出的 `lastTurnId` 中间路径**有意不做**——schema 自 0.159.0 起 `beforeTurnId`/`lastTurnId` 恒在（本机 0.159.0/0.161.0/0.162.0/0.162.1 四版二进制实测），运行时探测模式下补试 lastTurnId 需对源线程再 fork 一次，会留孤儿线程，与降级 revert 同为 2 次 RPC 上限、无净收益） |
 | 死键 | — | `useUiLanguage.ts:185-186 'Edit this message'` 无调用点 | 我们的技术债 |
 
 ### C · 入口层（命令面板 / 快捷键 / 查找 / 复制）
@@ -129,7 +129,7 @@
 
 | 项 | 桌面端 | 我们 | 判定 |
 | --- | --- | --- | --- |
-| 能力门控 | 一张 **60+ 能力 × 最低版本** 表 + 别名表 + 预发布比较 | 散落 `methodSet.has('app/list')` 式探测（如 `DirectoryHub.vue`） | 他们更好（长期收益） |
+| 能力门控 | 一张 **60+ 能力 × 最低版本** 表 + 别名表 + 预发布比较 | **（round-168 已收口）**`capabilityGates.ts` 单一数据源（9 能力：hooks/remoteControl/plugins/apps/mcps/mcpReload/mcpLogin/marketplace/pluginShare），替掉 App.vue / DirectoryHub.vue 共 9 处散落 `methodSet.has()` 内联数组 | **打平（模式）· 规模差距登记**（round-175 复核改判）：方法探测（方法不存在 = 不可用）已覆盖现有全部能力面；「版本 × 能力」维度只在「方法存在但行为/开关不同」时有意义，唯一实例 `instant_interrupt ≥ 0.159.0` 已在桥侧实现（`appServerRuntimeConfig.ts` `codexCliSupportsInstantInterrupt`）；fork 参数取证显示 `beforeTurnId`/`lastTurnId` 自 0.159.0 起恒在 ⇒ 无需版本门控。60+ 规模与别名表/预发布比较属桌面（多端发布形态）特有，等我们能力面扩张到方法探测不够用时再立项 |
 | 枢纽约束 | — | 四不变式 + 手写闸门（`check-ui-contract` 59 / `check-message-media-surfaces` 44 / `check-hot-window` 6 / `check-bottom-lock` 4 / vitest 1035 例 89 文件） | **我们更严** |
 
 ---
