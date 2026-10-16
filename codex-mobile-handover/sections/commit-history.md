@@ -450,6 +450,13 @@
 - **坑**：同文档 hash goto 不重载文档（探针每场景带 `?r169s=<n>`）；`thread/turns/list` 同时服务 missing 预检与 revert 水合 ⇒ 探针按 `state.reverted` 动态响应。
 - **批 4 四项全部落地**（#1/#3 round-168、#2/#4 round-169）。详见 [round-169](../rounds/round-169-batch4-inline-edit-and-edit-resend.md)。
 
+## v0.1.134 发布（round-172 ~ round-175，发布闭环）
+
+- **范围**：`f526da53`（v0.1.133 闭环）→ 头 = **7 提交**（round-172 两笔 + round-173 三笔 + round-174 三笔 + round-175 一笔 + 本 bump，docs 回填计入其中），**15 文件 +1026/−27**。**`src/server/**` 零改动** ⇒ `SHARED_BRIDGE_VERSION` 不动（保持 v7）。
+- **内容三组**：① **滚动工程收口**（round-172/173）——前置插入保位统一为哨兵锚（`.conversation-hot-anchor`）增量多结算（nextTick/rAF×2/nextTick，基线取写入后坐标）+ `.conversation-list` `overflow-anchor:none`；按线程滚动状态跨会话持久化 `codex-web-local.thread-scroll-state.v1`（LRU 24：冷页深度/展开轮/距底读数/高度种子，保存=2s 节流带尾沿 + 切线程 sync flush + pagehide）。② **无障碍**（round-174）——composer 前 `h4.sr-only`「Latest response」+ 动态 tabindex 配对（focusin 升 / 前向 keydown 降），聚焦 `focus({preventScroll:true})` 送最后 assistant final 块；Chromium 聚焦态摘 tabindex 必失焦 ⇒ 一次性 `focusout` 恢复。③ **parity 清零**（round-174/175 纯文档取证）——行 54/55/61/62/65/79/132/64 全部改判「打平」，「他们更好」判定行归零。
+- **发布动作**：发版前完整构建验证（vue-tsc 退 0 · vitest **1060/1060**（93 文件）· `vite build` 退 0 · tsup 退 0；tsup 入口为 `node_modules/tsup/dist/cli-default.js`，`dist/cli.js` 不存在）。bump `93bc411a` → tag `v0.1.134`（annotated）→ `gh release create --repo cattails-lgao/codex-mobile --latest`（https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.134 ，publishedAt `2026-10-16T14:12:48Z` ＝北京 22:12:48）。**gh 默认 remote 落在 upstream（friuns2）** ⇒ 必须显式 `--repo` 指定 fork；tag 先 `git push origin v0.1.134`。main 推送经代理 `127.0.0.1:7890`（中途一次 TLS 瞬断，单次重试成功）。
+- **npm**：`codex-mobile-re@0.1.134` 待维护者 `pnpm publish`（npm `latest` 暂仍为 0.1.133）；publish 后回填上架时刻/shasum（体例同 round-171 段）。
+
 ## round-175（parity 滞后复核第二轮：分叉 / 能力门控 / 揭示动画，未发布）
 
 **性质**：纯文档取证轮（`src/` 零改动，口径同 round-167）。承接 round-174 复核口径，把剩余疑似滞后的三行全部核掉。
