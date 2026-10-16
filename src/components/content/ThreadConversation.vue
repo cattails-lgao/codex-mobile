@@ -1294,7 +1294,14 @@ function turnDurationMs(turn: {
 }
 
 function nextColdPage(): void {
+  const container = conversationListRef.value
+  const threadIdAtStart = props.activeThreadId
+  // round-172：cold 翻页也是前置插入。此前这里零补偿——是浏览器原生滚动锚定在隐形
+  // 兜底；overflow-anchor:none（round-172）关掉后改走与 loadMoreAbove 同款的
+  // 锚定元素增量结算。capture 有槽位去重：贴顶甩动连发时只记一次锚。
+  if (container) capturePrependScrollAnchor(container)
   warmLayerState.value = warmLayerWithNextColdPage(warmLayerState.value, props.activeThreadId)
+  if (container) schedulePrependSettlement(threadIdAtStart)
 }
 
 function toggleWarmTurn(turn: number): void {
@@ -2424,24 +2431,123 @@ function jumpToLatest(): void {
   scheduleBottomLock(4)
 }
 
+// round-172：前置插入（载入更早消息 / cold 翻页）的滚动保位统一走「锚定元素 +
+// 增量位移补偿」。原 loadMoreAbove 读「整页总高度差」——前置插入 ΔH 恰好等于插入
+// 高度时精确，但 await 期间底部若同时流式增长，ΔH 会把不该补的底部增量也补进去
+// ⇒ 视口跳（round-148 §二 判桌面端「按轮锚定补偿」更好的根因）；nextColdPage 此前
+// 则是零补偿——一直靠浏览器原生滚动锚定隐形兜底。两路统一为本机制，并把
+// .conversation-list 的原生锚定显式关掉（overflow-anchor: none，见样式表注释）：
+// 保位唯一来源 = 这里，行为可预测。
+//
+// 与桌面端正解（26.1013 asar 取证：补偿算自新旧布局数据 + computeScrollDistanceForAnchor
+// 查表，结构性免疫多次 flush）的关系：本机制是它的 DOM 读近似——锚选在**前插点下方、
+// 恒渲染、对流式追加免疫**的节点上，用「增量多结算」对冲 flush 拆分；查表式方案
+// （turnVirtualizer.computeScrollDistanceForAnchor）仍登记为绝对定位虚拟化时代的终局。
+//
+// 锚 = hot 区顶哨兵 li（批 3c `.conversation-hot-anchor`，恒渲染、h-0、顶边 =
+// warm 区底界）：
+//  · 在前插点**下方** ⇒ 位移 = 插入高度，且对流式追加免疫（新轮追加在它之后、
+//    旧轮正文增长不动它的顶边）；
+//  · keyed v-for 前插不重建既有节点 ⇒ cold/warm 窗口滑动、时间分隔栏重挂都动不了它；
+//  · 无热区时（空线程边缘态）回退首个 turn 根 li。
+type PrependScrollAnchor = { anchor: HTMLElement; lastTop: number }
+let pendingPrependAnchor: PrependScrollAnchor | null = null
+
+function queryPrependAnchor(container: HTMLElement): HTMLElement | null {
+  return (
+    container.querySelector<HTMLElement>('.conversation-hot-anchor') ??
+    container.querySelector<HTMLElement>('li.conversation-item')
+  )
+}
+
+// 待结算槽位：同一渲染批内多次触发（贴顶甩动时 onConversationScroll 连发
+// nextColdPage，Vue 渲染批处理 ⇒ 多次捕获时 DOM 未变）只记一次锚，
+// 否则多条结算链会对同一位移重复叠加。
+function capturePrependScrollAnchor(container: HTMLElement): void {
+  if (pendingPrependAnchor) return
+  const anchor = queryPrependAnchor(container)
+  if (!anchor) return
+  pendingPrependAnchor = { anchor, lastTop: anchor.getBoundingClientRect().top }
+}
+
+function settlePrependScrollCompensationOnce(): void {
+  const captured = pendingPrependAnchor
+  const container = conversationListRef.value
+  if (!captured || !container) {
+    pendingPrependAnchor = null
+    return
+  }
+  if (!captured.anchor.isConnected) {
+    // 锚被换掉（极少数：补偿窗口内热区恰好清空/重建）⇒ 以当前锚重立基线，
+    // 放弃本段位移（最差退化为本机制之前的旧行为）。
+    const next = queryPrependAnchor(container)
+    if (!next) {
+      pendingPrependAnchor = null
+      return
+    }
+    pendingPrependAnchor = { anchor: next, lastTop: next.getBoundingClientRect().top }
+    return
+  }
+  const top = captured.anchor.getBoundingClientRect().top
+  const delta = top - captured.lastTop
+  if (delta !== 0) {
+    container.scrollTop += delta
+    // 基线必须取「写入后」的视口坐标：scrollTop += delta 会让锚的 rect 回落 delta，
+    // 若把写入前的 top 存为基线，下一次结算会把这份已补的量再补一遍（round-164
+    // 诊断实录：cold 翻页超补 66px = 分隔栏重挂的位移量）。
+    captured.lastTop = top - delta
+  }
+}
+
+function discardPrependScrollAnchor(): void {
+  pendingPrependAnchor = null
+}
+
+function schedulePrependSettlement(threadIdAtStart: string): void {
+  const dead = () => props.activeThreadId !== threadIdAtStart || !pendingPrependAnchor
+  void nextTick().then(() => {
+    if (dead()) {
+      discardPrependScrollAnchor()
+      return
+    }
+    settlePrependScrollCompensationOnce()
+  })
+  // 3b/3c 窗口重算走 rAF（recomputeWarmWindow 等）且 plan 落 DOM 还要再一个 flush；
+  // 两个 rAF + nextTick 后必然已结算完，残余位移为 0（增量结算多余点无副作用）。
+  // round-172 真机诊断：3b 窗口化把 cold 前插拆成**两次 flush**（flush1 带过期窗口
+  // 计划渲染，sh 先短少后补足），一次性结算落在两 flush 之间会按中间态补错——
+  // 增量多结算对 flush 拆分与 rAF 先后不敏感，每一步视口都稳定。
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      void nextTick().then(() => {
+        if (dead()) {
+          discardPrependScrollAnchor()
+          return
+        }
+        settlePrependScrollCompensationOnce()
+        discardPrependScrollAnchor()
+      })
+    })
+  })
+}
+
 async function loadMoreAbove(): Promise<void> {
   const container = conversationListRef.value
   if (!container || !props.hasMorePersistedAbove || isLoadingMore.value || props.isLoadingPersistedAbove === true) return
 
   isLoadingMore.value = true
   const threadIdAtStart = props.activeThreadId
-
-  const prevScrollHeight = container.scrollHeight
-  const prevScrollTop = container.scrollTop
+  capturePrependScrollAnchor(container)
 
   try {
     await props.loadEarlierMessages?.(threadIdAtStart)
 
-    await nextTick()
-
     // Discard scroll restoration if the thread changed while we were awaiting.
     if (props.activeThreadId === threadIdAtStart) {
-      container.scrollTop = prevScrollTop + (container.scrollHeight - prevScrollHeight)
+      await nextTick()
+      schedulePrependSettlement(threadIdAtStart)
+    } else {
+      discardPrependScrollAnchor()
     }
   } finally {
     isLoadingMore.value = false
@@ -2701,6 +2807,7 @@ onBeforeUnmount(() => {
     cancelAnimationFrame(bottomLockFrame)
     bottomLockFrame = 0
   }
+  discardPrependScrollAnchor()
   unbindContentGrowthObserver()
 })
 </script>
@@ -2731,6 +2838,12 @@ onBeforeUnmount(() => {
 
 .conversation-list {
   @apply h-full min-h-0 list-none m-0 px-2 sm:px-6 py-0 overflow-y-auto overflow-x-visible flex flex-col gap-2 sm:gap-3;
+  /* round-172：显式接管滚动锚定（桌面端 26.1013 同款前提，reply-chain-transcript /
+     thread-scroll-container 均为 overflow-anchor:none）。此前前置插入的保位一半靠
+     浏览器原生锚定隐形兜底（cold 翻页此前零显式补偿），一半靠整页差补偿；原生锚定
+     与自有补偿并存有双重补偿风险且不可预测。关闭后保位唯一来源 =
+     capturePrependScrollAnchor 的锚定元素补偿。 */
+  overflow-anchor: none;
 }
 
 .conversation-load-more {
