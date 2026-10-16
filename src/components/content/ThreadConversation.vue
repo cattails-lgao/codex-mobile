@@ -672,6 +672,8 @@ import { readPlanData } from '../../utils/plan'
 import { formatTimeDividerLabel, selectTimeDividerTurnKeys } from '../../utils/timeDividers'
 import { headingClass, headingTag } from '../../utils/conversationPaths'
 import {
+  DEFAULT_BOTTOM_THRESHOLD_PX,
+  getScrollDistanceFromBottomPx,
   getScrollTopForDistanceFromBottomPx,
   isScrollAtBottomPx,
   readScrollMetricsPx,
@@ -757,6 +759,10 @@ import {
   type ToolRenderItem,
 } from '../../utils/toolAggregation'
 import { formatTurnDuration } from '../../composables/useDesktopState'
+import {
+  loadThreadScrollStateMap,
+  saveThreadScrollStateMap,
+} from '../../composables/useDesktopStatePersistence'
 import { sumTurnDurations } from '../../utils/turnDurations'
 import { createMarkdownRendering } from './useMarkdownRendering'
 
@@ -1088,6 +1094,130 @@ const warmLayerState = ref<WarmLayerState>(createWarmLayerState(props.activeThre
 const activeWarmLayer = computed(() => warmLayerForSession(warmLayerState.value, props.activeThreadId))
 
 const isLoadingMore = ref(false)
+
+// ---------------------------------------------------------------------------
+// round-173：按线程滚动状态持久化（跨会话恢复阅读位；桌面端 parity 表「滚动状态
+// 持久化」行）。保存 = 冷页深度 + 展开 warm 轮 + 距底读数 + hot 实测高度种子，
+// 节流写 localStorage（scroll 时 ≤2s 一次；切走线程 / pagehide / 卸载时冲刷）。
+// 恢复 = 打开线程时取回：warmLayerState 直接用存档冷页深度重建（warm spacer 是
+// 实测常量 ⇒ 不需要展开任何卡），高度缓存播种（RO 会重测，脏种子只影响窗口边界
+// 选取），距底读数 > 贴底阈值时关一次 autoFollow 并在消息渲染后按距底写回。
+// 守卫：isLoading（容器还是空壳）、恢复未落位、warmLayerState 未切到当前线程
+// （切换竞态窗口内 props.activeThreadId 已变而 sessionKey 还是旧值 ⇒ 不保存，
+// 防止把旧线程的几何记到新线程名下）。
+// ---------------------------------------------------------------------------
+const THREAD_SCROLL_STATE_SAVE_THROTTLE_MS = 2000
+const THREAD_SCROLL_STATE_RESTORE_FRAMES = 4
+
+let lastThreadScrollStateSaveAt = 0
+let threadScrollStateSaveFrame = 0
+let threadScrollStateSaveTimer: ReturnType<typeof setTimeout> | null = null
+let threadScrollStateRestoreFrame = 0
+let threadScrollStateRestoreFramesLeft = 0
+const pendingScrollRestorePx = ref<number | null>(null)
+
+function captureThreadScrollStateSnapshot(threadId: string): { coldPage: number; expandedWarmTurns: number[]; distanceFromBottomPx: number; hotHeights: Record<string, number> } | null {
+  const container = conversationListRef.value
+  if (!container || props.isLoading || props.activeThreadId !== threadId) return null
+  if (activeWarmLayer.value.sessionKey !== threadId) return null
+  if (pendingScrollRestorePx.value != null) return null
+  const warm = activeWarmLayer.value
+  const hotHeights: Record<string, number> = {}
+  for (const [key, heightPx] of hotHeightCache.value) {
+    if (!key || !Number.isFinite(heightPx) || heightPx <= 0) continue
+    hotHeights[key] = Math.round(heightPx * 100) / 100
+  }
+  return {
+    coldPage: warm.coldPage,
+    expandedWarmTurns: [...warm.expandedWarmTurns],
+    distanceFromBottomPx: getScrollDistanceFromBottomPx(readScrollMetricsPx(container)),
+    hotHeights,
+  }
+}
+
+function saveThreadScrollStateNow(threadId: string = props.activeThreadId): void {
+  const snapshot = captureThreadScrollStateSnapshot(threadId)
+  if (!snapshot) return
+  const map = loadThreadScrollStateMap()
+  map[threadId] = {
+    v: 1,
+    coldPage: snapshot.coldPage,
+    expandedWarmTurns: snapshot.expandedWarmTurns,
+    distanceFromBottomPx: snapshot.distanceFromBottomPx,
+    hotHeights: snapshot.hotHeights,
+    savedAt: Date.now(),
+  }
+  saveThreadScrollStateMap(map)
+  lastThreadScrollStateSaveAt = Date.now()
+}
+
+// 节流（带尾沿）：滚动高频触发，2s 窗口；窗口内的后续触发不再丢弃而是排一个尾沿
+// 定时器（探针 S1 实证：开线程的贴底保存占住窗口后，随后的滚动保存被静默丢弃，
+// 只剩 pagehide 冲刷兜底 ⇒ 阅读位最多 2s 陈旧且依赖导航才落盘）。到期前的那次
+// 落盘仍由切走线程 / pagehide / 卸载的冲刷兜底。
+function scheduleThreadScrollStateSave(): void {
+  if (threadScrollStateSaveFrame) return
+  const remaining = THREAD_SCROLL_STATE_SAVE_THROTTLE_MS - (Date.now() - lastThreadScrollStateSaveAt)
+  if (remaining <= 0) {
+    if (threadScrollStateSaveTimer) {
+      clearTimeout(threadScrollStateSaveTimer)
+      threadScrollStateSaveTimer = null
+    }
+    threadScrollStateSaveFrame = requestAnimationFrame(() => {
+      threadScrollStateSaveFrame = 0
+      saveThreadScrollStateNow()
+    })
+    return
+  }
+  if (!threadScrollStateSaveTimer) {
+    threadScrollStateSaveTimer = setTimeout(() => {
+      threadScrollStateSaveTimer = null
+      scheduleThreadScrollStateSave()
+    }, remaining + 10)
+  }
+}
+
+// 恢复的滚动写入：autoFollow 已关 ⇒ 没有别的写入方；按距底坐标立滚动位，
+// 再连补数帧（3b/3c 窗口计划与图片占位会让 scrollHeight 在首帧后继续变，
+// 距底写法天然收敛：每帧重读 metrics 重算，不需要记基线）。
+function runThreadScrollStateRestoreFrame(): void {
+  const container = conversationListRef.value
+  const distancePx = pendingScrollRestorePx.value
+  threadScrollStateRestoreFrame = 0
+  if (!container || distancePx == null) {
+    threadScrollStateRestoreFramesLeft = 0
+    return
+  }
+  const metrics = readScrollMetricsPx(container)
+  if (metrics.scrollHeightPx > metrics.clientHeightPx) {
+    container.scrollTop = getScrollTopForDistanceFromBottomPx(metrics, distancePx)
+  }
+  threadScrollStateRestoreFramesLeft -= 1
+  if (threadScrollStateRestoreFramesLeft > 0) {
+    threadScrollStateRestoreFrame = requestAnimationFrame(runThreadScrollStateRestoreFrame)
+  } else {
+    pendingScrollRestorePx.value = null
+  }
+}
+
+function scheduleThreadScrollStateRestore(): void {
+  if (pendingScrollRestorePx.value == null || threadScrollStateRestoreFrame) return
+  threadScrollStateRestoreFramesLeft = THREAD_SCROLL_STATE_RESTORE_FRAMES
+  threadScrollStateRestoreFrame = requestAnimationFrame(runThreadScrollStateRestoreFrame)
+}
+
+function onPageHideFlushScrollState(event?: Event): void {
+  if (event?.type === 'visibilitychange' && document.visibilityState !== 'hidden') return
+  if (threadScrollStateSaveFrame) {
+    cancelAnimationFrame(threadScrollStateSaveFrame)
+    threadScrollStateSaveFrame = 0
+  }
+  if (threadScrollStateSaveTimer) {
+    clearTimeout(threadScrollStateSaveTimer)
+    threadScrollStateSaveTimer = null
+  }
+  saveThreadScrollStateNow()
+}
 
 const filteredMessages = computed(() =>
   props.messages.filter((message) => !isPlanMessage(message) && !isModelSwitchMessage(message)),
@@ -2688,6 +2818,8 @@ watch(
     pruneFileChangeSummaryIds()
 
     await scheduleConversationScroll()
+    // round-173：消息首帧到达后按存档距底读数立滚动位（恢复挂起时）。
+    scheduleThreadScrollStateRestore()
   },
 )
 
@@ -2728,15 +2860,59 @@ watch(
   },
 )
 
+// round-173：切走线程时冲刷保存**上一个**线程的滚动状态。sync flush ⇒ props 已变
+// 而 DOM 尚未更新、warmLayerState 未重建 ⇒ 容器度量与 warm 层都还属于旧线程，
+// captureThreadScrollStateSnapshot 的守卫（activeThreadId === 旧 id？不 —— 显式传旧 id，
+// 且 sessionKey === 旧 id 成立）恰好在这个窗口内全部成立。
+watch(
+  () => props.activeThreadId,
+  (_next, prev) => {
+    if (prev && prev !== props.activeThreadId) saveThreadScrollStateNow(prev)
+  },
+  { flush: 'sync' },
+)
+
+// round-173：线程滚动状态初始化（存档恢复 / 常规重建）。挂载与线程切换共用 ——
+// 首次挂载时 activeThreadId watcher 不触发（无变化），重载页面必须走 onMounted。
+function initializeThreadScrollState(): void {
+  autoFollowOutput.value = true
+  if (threadScrollStateRestoreFrame) {
+    cancelAnimationFrame(threadScrollStateRestoreFrame)
+    threadScrollStateRestoreFrame = 0
+  }
+  threadScrollStateRestoreFramesLeft = 0
+  pendingScrollRestorePx.value = null
+  let restoredWarmState: WarmLayerState | null = null
+  const savedEntry = loadThreadScrollStateMap()[props.activeThreadId]
+  if (savedEntry) {
+    restoredWarmState = {
+      sessionKey: props.activeThreadId,
+      expandedWarmTurns: new Set(savedEntry.expandedWarmTurns),
+      coldPage: savedEntry.coldPage,
+    }
+    // 高度种子：只影响窗口边界选取（未测块强制入窗、RO 重测真实值），脏种子无害。
+    if (hotHeightCache.value.size === 0 && Object.keys(savedEntry.hotHeights).length > 0) {
+      hotHeightCache.value = new Map(Object.entries(savedEntry.hotHeights))
+    }
+    // 离开时不在贴底态 ⇒ 关 autoFollow，按距底读数恢复阅读位；贴底态保持跟随
+    // （与旧行为一致，流式输出的线程也自然落到最新）。
+    if (savedEntry.distanceFromBottomPx > DEFAULT_BOTTOM_THRESHOLD_PX) {
+      pendingScrollRestorePx.value = savedEntry.distanceFromBottomPx
+      autoFollowOutput.value = false
+    }
+  }
+  warmLayerState.value = restoredWarmState ?? createWarmLayerState(props.activeThreadId)
+}
+
 watch(
   () => props.activeThreadId,
   async () => {
-    autoFollowOutput.value = true
     modalImageUrl.value = ''
     isLoadingMore.value = false
     resetFileChangeActions()
-    warmLayerState.value = createWarmLayerState(props.activeThreadId)
+    initializeThreadScrollState()
     await scheduleConversationScroll()
+    scheduleThreadScrollStateRestore()
   },
   { flush: 'post' },
 )
@@ -2753,7 +2929,12 @@ watch(
 // activeThreadId watcher 幂等。
 onMounted(() => {
   bindContentGrowthObserver()
+  // round-173：挂载期恢复（重载时 activeThreadId watcher 不触发，须走同款初始化）。
+  initializeThreadScrollState()
   void scheduleConversationScroll()
+  scheduleThreadScrollStateRestore()
+  window.addEventListener('pagehide', onPageHideFlushScrollState)
+  window.addEventListener('visibilitychange', onPageHideFlushScrollState)
 })
 
 function onConversationScroll(): void {
@@ -2761,6 +2942,8 @@ function onConversationScroll(): void {
   if (!container || props.isLoading) return
   autoFollowOutput.value = isAtBottom(container)
   scheduleWarmWindowRecompute()
+  // round-173：阅读位存档（节流；isLoading 与恢复未落位时 capture 守卫会拒存）。
+  scheduleThreadScrollStateSave()
   if (container.scrollTop < LOAD_MORE_SCROLL_THRESHOLD_PX && !isLoadingMore.value) {
     if (hasColdTurns.value) {
       nextColdPage()
@@ -2809,6 +2992,22 @@ onBeforeUnmount(() => {
   }
   discardPrependScrollAnchor()
   unbindContentGrowthObserver()
+  // round-173：卸载前冲刷保存 + 摘掉页隐藏监听 + 清恢复帧。
+  window.removeEventListener('pagehide', onPageHideFlushScrollState)
+  window.removeEventListener('visibilitychange', onPageHideFlushScrollState)
+  if (threadScrollStateSaveFrame) {
+    cancelAnimationFrame(threadScrollStateSaveFrame)
+    threadScrollStateSaveFrame = 0
+  }
+  if (threadScrollStateSaveTimer) {
+    clearTimeout(threadScrollStateSaveTimer)
+    threadScrollStateSaveTimer = null
+  }
+  if (threadScrollStateRestoreFrame) {
+    cancelAnimationFrame(threadScrollStateRestoreFrame)
+    threadScrollStateRestoreFrame = 0
+  }
+  saveThreadScrollStateNow()
 })
 </script>
 

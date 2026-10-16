@@ -329,6 +329,106 @@ export function saveThreadTokenUsageMap(state: Record<string, UiThreadTokenUsage
 
 const THREAD_MODEL_SWITCH_MARKERS_STORAGE_KEY = 'codex-web-local.thread-model-switch-markers.v1'
 
+// ---------------------------------------------------------------------------
+// round-173：按线程滚动状态持久化（桌面端 parity 表「滚动状态持久化」行，26.1013
+// asar 取证同款机制：{renderedWindow, turnHeightsByKey} 跨会话恢复，重开不丢阅读位）。
+// 我们侧的等价物：冷页深度（warmLayerState.coldPage）+ 展开的 warm 轮 + 距底读数
+// （距底坐标系，round-153 批 3a）+ hot 实测高度种子（批 3c RO 缓存的跨会话播种）。
+// warm 区 spacer 是实测常量 ⇒ 恢复 = 恢复冷页深度 + 按距底写一次 scrollTop，
+// 不需要展开任何卡；高度种子只影响窗口边界选取（RO 会重测），脏种子无害。
+// ---------------------------------------------------------------------------
+
+export const THREAD_SCROLL_STATE_STORAGE_KEY = 'codex-web-local.thread-scroll-state.v1'
+/** 最多保留多少个线程的滚动状态（按 savedAt LRU 淘汰）。 */
+export const MAX_THREAD_SCROLL_STATE_ENTRIES = 24
+/** 每线程最多播种多少个 hot 高度条目（窗口边界选取足够，控 localStorage 体积）。 */
+export const MAX_THREAD_SCROLL_STATE_HEIGHTS = 200
+
+export type ThreadScrollStateEntry = {
+  /** 格式版本（结构不兼容时整体丢弃，不尝试迁移）。 */
+  v: 1
+  /** warm 层冷页深度（前端分页翻了多少页）。 */
+  coldPage: number
+  /** 展开过的 warm 轮号。 */
+  expandedWarmTurns: number[]
+  /** 保存时的距底距离（px，≥ 0）。 */
+  distanceFromBottomPx: number
+  /** hot 块实测高度种子（turn key → px），仅当前窗口已测块。 */
+  hotHeights: Record<string, number>
+  savedAt: number
+}
+
+export type ThreadScrollStateMap = Record<string, ThreadScrollStateEntry>
+
+function normalizeThreadScrollStateEntry(input: unknown): ThreadScrollStateEntry | null {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null
+  const row = input as Record<string, unknown>
+  if (row.v !== 1) return null
+  const coldPage = row.coldPage
+  if (typeof coldPage !== 'number' || !Number.isInteger(coldPage) || coldPage < 0) return null
+  const distance = row.distanceFromBottomPx
+  if (typeof distance !== 'number' || !Number.isFinite(distance) || distance < 0) return null
+  const savedAt = row.savedAt
+  if (typeof savedAt !== 'number' || !Number.isFinite(savedAt) || savedAt <= 0) return null
+  const rawExpanded = Array.isArray(row.expandedWarmTurns) ? row.expandedWarmTurns : []
+  const expandedWarmTurns: number[] = []
+  for (const value of rawExpanded) {
+    if (typeof value === 'number' && Number.isInteger(value) && value >= 0 && !expandedWarmTurns.includes(value)) {
+      expandedWarmTurns.push(value)
+    }
+  }
+  const rawHeights = row.hotHeights
+  const hotHeights: Record<string, number> = {}
+  if (rawHeights && typeof rawHeights === 'object' && !Array.isArray(rawHeights)) {
+    for (const [key, value] of Object.entries(rawHeights as Record<string, unknown>)) {
+      if (!key || typeof value !== 'number' || !Number.isFinite(value) || value <= 0) continue
+      hotHeights[key] = value
+      if (Object.keys(hotHeights).length >= MAX_THREAD_SCROLL_STATE_HEIGHTS) break
+    }
+  }
+  return { v: 1, coldPage, expandedWarmTurns, distanceFromBottomPx: distance, hotHeights, savedAt }
+}
+
+export function loadThreadScrollStateMap(): ThreadScrollStateMap {
+  if (typeof window === 'undefined') return {}
+  try {
+    const raw = window.localStorage.getItem(THREAD_SCROLL_STATE_STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    const result: ThreadScrollStateMap = {}
+    for (const [threadId, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (!threadId) continue
+      const entry = normalizeThreadScrollStateEntry(value)
+      if (entry) result[threadId] = entry
+    }
+    return result
+  } catch {
+    return {}
+  }
+}
+
+export function saveThreadScrollStateMap(state: ThreadScrollStateMap): void {
+  if (typeof window === 'undefined') return
+  try {
+    const entries = Object.entries(state)
+      .filter((row): row is [string, ThreadScrollStateEntry] => Boolean(row[0]) && normalizeThreadScrollStateEntry(row[1]) !== null)
+      // LRU：按 savedAt 保留最近 MAX_THREAD_SCROLL_STATE_ENTRIES 个线程。
+      .sort((a, b) => b[1].savedAt - a[1].savedAt)
+      .slice(0, MAX_THREAD_SCROLL_STATE_ENTRIES)
+    if (entries.length === 0) {
+      window.localStorage.removeItem(THREAD_SCROLL_STATE_STORAGE_KEY)
+    } else {
+      const trimmed: ThreadScrollStateMap = {}
+      for (const [threadId, entry] of entries) trimmed[threadId] = entry
+      window.localStorage.setItem(THREAD_SCROLL_STATE_STORAGE_KEY, JSON.stringify(trimmed))
+    }
+  } catch {
+    // Ignore localStorage failures (quota/private mode).
+  }
+}
+
+
 // round-73：本地持久化的「模型切换」分割栏消息。用户切模型时往线程消息列表追加一条
 // `messageType === 'modelSwitch'` 的系统消息，仅存在本机 localStorage，不写入服务器。
 export function loadModelSwitchMarkerMap(): Record<string, UiMessage[]> {
