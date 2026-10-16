@@ -6,7 +6,7 @@
 
 | 项 | 值 |
 |---|---|
-| Git 分支 | `main`（**领先 1 笔待推**——v0.1.134 发版 docs 笔随本提交落地；bump/tag/Release 已闭环：bump `93bc411a` + tag `v0.1.134` + [GitHub Release](https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.134)（--latest）均已推送）· 当前进度 **v0.1.134 发版** |
+| Git 分支 | `main`（**已同步 `origin/main`，落后 0**——v0.1.134 发版 docs 笔 `464918b9` 已于 2026-10-16 深夜经代理 `127.0.0.1:7890` 推送成功（`93bc411a..464918b9`）；tag `v0.1.134` 与 [GitHub Release](https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.134) 同步闭环）· 当前进度 **v0.1.134 发版** |
 | Dev 端口 | 4173 |
 | Dev 状态 | **未运行**（2026-10-16 21:4x 复测：本轮 vite dev server（5173，round-174 探针用）与 headless Edge 已全部结束；4173/4191 无监听）。**round-174（无障碍 Latest response + parity 复核）产品侧全绿**（`vue-tsc --noEmit` 退 0 · `vitest run` **1060/1060 / 93 文件** · `vite build` 退 0 · ui-contract **60/60**，+round-174 断言）＋真机探针 4 场景全过（标题 clipped/afterList、focusin 升 0、shift+Tab 落最后 final 块且 preventScroll、前向 Tab 不落标题） |
 | App-server | **dev server 未运行**（`4173` 无监听），**真机只读取证两次**：round-158 测 3 个新增客户端方法（**2 可用 + `thread/prediction/request` 未实现**，证据 `tmp/r158-rpc-probe.json`）；**round-159 做了全量普查** —— 对 **170** 个客户端方法逐方法发**从 schema 构造的合法参数**，得 **`OK 62 / IMPLEMENTED 86 / UNDETERMINED 13 / SKIPPED 5 / NOT_IMPLEMENTED 4`**，「已发布但未实现」由 1 个更正为 **4 个**（见该轮文档），证据 `tmp/probe-app-server-methods.json`，可复跑 `node scripts/probe-app-server-methods.cjs`。**round-161 未跑真机**（只改闸门脚本与文档）。版本口径见「工具链」；**测 codex 版本前先确认 `CODEXUI_CODEX_COMMAND` 指向哪一套**。**round-162 未跑真机**（只改 `--selftest` 夹具字面量并跑产品侧验证） |
