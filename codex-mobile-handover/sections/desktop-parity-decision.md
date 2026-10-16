@@ -57,7 +57,7 @@
 | 原生滚动锚定 | 显式 `[overflow-anchor:none]`，自己接管 | **（round-172 已收口）**`.conversation-list` 显式 `overflow-anchor: none`，保位唯一来源 = 自有哨兵锚补偿 | 打平 |
 | 加载历史触发 | 距底 ≤ `max(clientHeight, 64)` 时 **while 连打** | `hasColdTurns → nextColdPage()` / `hasMorePersistedAbove → loadMoreAbove()`（`:2084-2089`），另有手动按钮（`:29-43`） | 他们对（自动、连续）；我们对（可控、有冷页语义） |
 | 卸载保护 | `firstProtectedItemId = turnItemIds.at(-500)`、距底 > 24px 才上报 | 无窗口化 ⇒ 无此问题；但 round-143 要求**回退点必须仍在渲染集内** | 打平（两个不同机制的同一类约束） |
-| 滚动状态持久化 | `{renderedWindow, turnHeightsByKey}` 跨会话恢复 | 无 | 他们更好（重开不「先估后跳」） |
+| 滚动状态持久化 | `{renderedWindow, turnHeightsByKey}` 跨会话恢复 | **（round-173 已收口）**按线程存 coldPage + 展开 warm 轮 + 距底读数 + hot 高度种子（`codex-web-local.thread-scroll-state.v1`，LRU 24），重开恢复阅读位（贴底态保持跟随） | 打平（同构机制，均为浏览器本地） |
 | 「滚动到底」按钮 | 有，判据 `距底 > spacerHeight + 24` | `scrollToBottom()`（`:1863`）/ `isAtBottom()`（`:1876`）**都已实现，但无 UI** | 他们更好（差一层 UI 而已） |
 | 时间分隔 | 跨天 或 间隔 ≥ 30 分钟 | **无**（只有 `ModelSwitchDivider`，`:52`） | 他们更好 |
 | 右侧导航轨 | `IntersectionObserver` + 层级/书签 | **已有** `QuestionJumpBar.vue`：点轨跳转 + hover 预览 + 距 hover 点渐变波（`ThreadConversation.vue:524`、`jumpToQuestion` `:1223`） | **打平**（上一轮材料误记「无」） |

@@ -450,6 +450,22 @@
 - **坑**：同文档 hash goto 不重载文档（探针每场景带 `?r169s=<n>`）；`thread/turns/list` 同时服务 missing 预检与 revert 水合 ⇒ 探针按 `state.reverted` 动态响应。
 - **批 4 四项全部落地**（#1/#3 round-168、#2/#4 round-169）。详见 [round-169](../rounds/round-169-batch4-inline-edit-and-edit-resend.md)。
 
+## round-173（按线程滚动状态跨会话持久化，未发布）
+
+**性质**：产品侧功能（桌面端 parity 表「滚动状态持久化」行收口；`useDesktopStatePersistence.ts` +~100 行、`ThreadConversation.vue` +~150/−8、单测 +7 例）。
+
+**问题**：重开线程一律贴底跟随——阅读位与冷页深度全丢；桌面端按线程存 `{renderedWindow, turnHeightsByKey}` 跨会话恢复（26.1013 取证 `xe` 快照函数）。
+
+**修复**：存 `codex-web-local.thread-scroll-state.v1`（LRU 24，v1 版本字段 + 逐项净化）：coldPage + expandedWarmTurns + 距底读数 + hot 高度种子（≤200 键）；保存 = 滚动节流 2s **带尾沿** + 切走线程（sync watcher，DOM 未换窗口内代旧线程落盘）/ pagehide / visibilitychange→hidden / 卸载冲刷；恢复 = 挂载与切换共用 `initializeThreadScrollState()`（首次挂载 watcher 不触发），warmLayerState 按存档重建（warm spacer 是实测常量 ⇒ 不展开任何卡）、高度缓存播种（RO 重测）、距底超阈值关 autoFollow 按距底写回（4 帧 rAF 收敛），贴底态保持跟随语义。
+
+**提交**：`e72def38`（代码 6 文件 `+496/−3`）＋ **本段所在提交**（docs；本文件 1277 → 1293 行）。
+
+**验证基线**：真机 5 场景全 PASS（`tmp/r173-verify.cjs`：中部阅读位恢复 drift 0 / 贴底重开 dist 0 / 冷页深度恢复 warm 卡 18=18 sh 10027=10027 / pagehide 冲刷 1200 精确 / 坏数据回落贴底无 pageerror）；`vue-tsc` 退 0 · 单测 **1060/1060**（93 文件）· `vite build` 退 0 · ui-contract 59/59；脱敏闸门违规 0 · `--selftest` 19 例 · 链接+锚点 0/0 · 文档派生 drift 0。
+
+**踩坑**：①纯节流会**丢尾**——开线程的贴底保存占住 2s 窗口后，随后的滚动保存被静默丢弃（探针 S1 实证；真正落盘的是 pagehide 冲刷，恰好兜住所以此前不可见）⇒ 改带尾沿节流；②首次挂载不走 activeThreadId watcher（无变化）⇒ 恢复须挂载/切换共用；③切走线程只有 **sync flush** 窗口能代旧线程落盘（post 时 DOM 已换）；④探针工程：旧应用页的 pagehide flush 落在新文档 init 脚本**之后**（污染注入须先经 about:blank 退场），`context.addInitScript` 对已存在 page 的后续导航不生效（须 page 级）。
+
+**未闭环**（详见 [round-173 §五](../rounds/round-173-thread-scroll-state-persistence.md)）：inProgress 线程重开的恢复未构造真机用例（贴底态语义不变，非贴底态未验）；存档为浏览器本地、不跨设备；高度种子无内容指纹（只影响窗口边界，不影响 spacer 正确性）；真实 170 轮线程未复验。
+
 ## round-172（前置插入滚动保位：哨兵锚增量补偿 + `overflow-anchor:none`，未发布）
 
 **性质**：产品侧修复（`ThreadConversation.vue` 单文件 +162/−7，测试文档 + 索引共 4 文件）。分叉说明：同名事项曾在本地分叉线做过一版（`0d4df989`/`6f0742a2`，未推送、已弃），本轮在远端 3c 后架构上重做并升级锚选点。
