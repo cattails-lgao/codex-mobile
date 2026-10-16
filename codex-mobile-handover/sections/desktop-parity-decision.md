@@ -51,18 +51,18 @@
 | 容器结构 | 两层：外层 `height=totalHeightPx` 撑高 + 内层 `margin-top=topOffsetsPx[start]` | `<ul class="conversation-list">`（`ThreadConversation.vue:28`）单层，全高自然撑开 | 他们更省 DOM |
 | 分层模型 | 窗口化：只渲可见轮 + `retainedTurnKeys` | **三层 hot/warm/cold**：`HOT_TURNS=30`、`WARM_PAGE_SIZE=20`（`:997-998`），老轮次进 `WarmTurnCard`（用户文本 + 助手预览 + 工具计数，`:64-83`） | **语义上我们对**（折叠卡是有信息的摘要），**体量上他们对**（无级差） |
 | 高度来源 | 实测缓存 `measuredHeightsByKey` + 声明估算 + 兜底 280，DPR 对齐 | 浏览器自然高度，不缓存 **（round-165 补记：hot 区已有 RO 实测高度缓存 `hotBlockSpecs`/`hotHeightCache`）** | 他们更好（可预测、无抖动）；**差距已大幅收窄** |
-| 滚动坐标 | `distanceFromBottomPx`（距底） | `scrollTop`（从顶）+ `LOAD_MORE_SCROLL_THRESHOLD_PX = 200`（`:999`） | **他们更好**——追加内容时距底不变 ⇒ 天然不跳 |
-| 贴底 | `flex-col-reverse` + 距底 API | `scrollTop = scrollHeight` + `anchor.scrollIntoView({block:'end'})`（`:1872-1873`），配 `bottomLockFramesLeft` 连打 6 帧（`:1917`） | 我们这套是**为「无虚拟化」调出来的**，能用但脆 |
+| 滚动坐标 | `distanceFromBottomPx`（距底） | **（round-153 批 3a 已收口）**读写统一走距底坐标纯函数（`src/utils/conversationScrollDistance.ts`，ui-contract 钉死旧 `scrollTop = scrollHeight` 写法清零）；`LOAD_MORE_SCROLL_THRESHOLD_PX = 200` 只剩「上翻触发」的职责 | **打平**（round-174 复核改判：追加内容时距底不变，同款天然不跳） |
+| 贴底 | `flex-col-reverse` + 距底 API | **（round-153 批 3a 已收口）**`setScrollDistanceFromBottom(container, 0)`（`ThreadConversation.vue` scrollToBottom，`:2496`）+ bottom lock 连打 6 帧；`scrollIntoView` 已甩（落点等价、副作用归零） | **打平**（round-174 复核改判：同一距底口径） |
 | 加载历史保位 | 按**某一轮**锚定补偿（`computeScrollDistanceForAnchor`） | **（round-172 已收口）**哨兵锚（`li.conversation-hot-anchor`）增量多结算：`nextTick → rAF×2 → nextTick` 各结一次自上次以来的位移，基线取写入后坐标，对 3b 两次 flush 拆分不敏感 | 打平（机制不同：他们按布局数据查表，我们按恒渲染锚读实时位移；效果等价，真机 S1 漂移 −0.5px / S2 自洽） |
 | 原生滚动锚定 | 显式 `[overflow-anchor:none]`，自己接管 | **（round-172 已收口）**`.conversation-list` 显式 `overflow-anchor: none`，保位唯一来源 = 自有哨兵锚补偿 | 打平 |
 | 加载历史触发 | 距底 ≤ `max(clientHeight, 64)` 时 **while 连打** | `hasColdTurns → nextColdPage()` / `hasMorePersistedAbove → loadMoreAbove()`（`:2084-2089`），另有手动按钮（`:29-43`） | 他们对（自动、连续）；我们对（可控、有冷页语义） |
 | 卸载保护 | `firstProtectedItemId = turnItemIds.at(-500)`、距底 > 24px 才上报 | 无窗口化 ⇒ 无此问题；但 round-143 要求**回退点必须仍在渲染集内** | 打平（两个不同机制的同一类约束） |
 | 滚动状态持久化 | `{renderedWindow, turnHeightsByKey}` 跨会话恢复 | **（round-173 已收口）**按线程存 coldPage + 展开 warm 轮 + 距底读数 + hot 高度种子（`codex-web-local.thread-scroll-state.v1`，LRU 24），重开恢复阅读位（贴底态保持跟随） | 打平（同构机制，均为浏览器本地） |
-| 「滚动到底」按钮 | 有，判据 `距底 > spacerHeight + 24` | `scrollToBottom()`（`:1863`）/ `isAtBottom()`（`:1876`）**都已实现，但无 UI** | 他们更好（差一层 UI 而已） |
-| 时间分隔 | 跨天 或 间隔 ≥ 30 分钟 | **无**（只有 `ModelSwitchDivider`，`:52`） | 他们更好 |
+| 「滚动到底」按钮 | 有，判据 `距底 > spacerHeight + 24` | **已有 UI**：`jump-to-latest-button`（`ThreadConversation.vue:604-613`，`!autoFollowOutput` 显示），点击 `jumpToLatest` = 贴底 + 恢复跟随 + 4 帧锁底（`:2558`） | **打平**（round-174 复核改判；判据口径不同——桌面按距底读数、我们按 autoFollow 布尔，行为等价：滚离贴底即出现） |
+| 时间分隔 | 跨天 或 间隔 ≥ 30 分钟 | **已有**（round-149）：`timeDividers.ts`（`TIME_DIVIDER_GAP_MS` = 30min，基准取上一条已展示分隔栏）+ `TimeDivider.vue`，接线 `attachTimeDividers` 2 处被 ui-contract 钉死 | **打平**（round-174 复核改判；口径同款） |
 | 右侧导航轨 | `IntersectionObserver` + 层级/书签 | **已有** `QuestionJumpBar.vue`：点轨跳转 + hover 预览 + 距 hover 点渐变波（`ThreadConversation.vue:524`、`jumpToQuestion` `:1223`） | **打平**（上一轮材料误记「无」） |
 | 流式揭示动画 | `min(3000, max(1000, 长度×5))ms` | 无（直接出现） | 他们对（观感）；非必须 |
-| 无障碍 | `h4.sr-only`「Latest response」，Tab 直达最新回复 | 无 | 他们更好 |
+| 无障碍 | `h4.sr-only`「Latest response」，Tab 直达最新回复 | **（round-174 已收口）**同款 `h4.sr-only` + 动态 tabindex 配对（focusin 升 / 前向 Tab keydown 降）+ 聚焦即送最后 assistant final 块（`focus({preventScroll})`） | **打平**（机制逐项对齐；导航层简化：桌面走可中断的导航状态模块，我们直取最后 final 块，见 rounds/round-174 §四） |
 
 **A 域小结**：**他们赢在几何与滚动，我们赢在语义分层与安全边界。** 而这两件事其实**不冲突**——他们的几何层可以整段搬到我们的 hot 区（见 §四·批 0/批 3）。
 

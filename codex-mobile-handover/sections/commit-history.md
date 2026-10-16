@@ -450,6 +450,20 @@
 - **坑**：同文档 hash goto 不重载文档（探针每场景带 `?r169s=<n>`）；`thread/turns/list` 同时服务 missing 预检与 revert 水合 ⇒ 探针按 `state.reverted` 动态响应。
 - **批 4 四项全部落地**（#1/#3 round-168、#2/#4 round-169）。详见 [round-169](../rounds/round-169-batch4-inline-edit-and-edit-resend.md)。
 
+## round-174（无障碍「Latest response」+ parity 复核五处改判，未发布）
+
+**性质**：小收口轮（`ThreadConversation.vue` +93/−0 全部新增、`scripts/check-ui-contract.cjs` +27、parity 表 5 行改判）。起因：盘点 parity 表剩余「他们更好」行准备打包收尾，真查代码发现**两行判定早已过时**（按钮与时间分隔栏都已落地），随后把同表滚动坐标 / 贴底一并复核 ⇒ 五处改判 + 一处真正的代码缺口（无障碍）一起收口。
+
+**代码**：composer 前 `h4.sr-only`「Latest response」（桌面 26.1013 `virtualized-turn-list` asar 取证：focusin 焦点在标题后方升 0 / document keydown 前向 Tab 降 −1，反向 shift+Tab 从 composer 可达、正向 Tab 流不被打断），聚焦即 `focus({preventScroll})` 送到最后 assistant final 块（`.conversation-item-final` → `.conversation-turn-final` → `li.conversation-turn` 三级回退）。**两个坑**：① Chromium 聚焦态摘 `tabindex` 必失焦（连下一帧摘都失焦，`tmp/r174-focus-exp.cjs` 实测）⇒ 挂一次性 `focusout` 再恢复原状；② 注册走**第二个 `onMounted`/`onBeforeUnmount` 对**——ui-contract 钉住第一个 `onMounted` 的 240 字符窗口（须含 `scheduleConversationScroll`），现有窗口已近满。
+
+**parity 改判**（能力早已落地、判定过时）：行 54 滚动坐标 / 行 55 贴底 → **打平**（round-153 批 3a 距底坐标收口，ui-contract 钉死旧写法清零）；行 61 滚动到底按钮 → **打平**（`jump-to-latest-button` 已有 UI，`:604-613`）；行 62 时间分隔 → **打平**（round-149 已落地）；行 65 无障碍 → **打平**（本轮）。A 域「他们更好」功能行清零。
+
+**提交**：`8e3440df`（代码 + ui-contract 断言，2 文件 +93/−0）＋ **本段所在提交**（docs；本文件 1293 → 1307 行）。
+
+**验证基线**：探针 `tmp/r174-verify.cjs` **4/4 PASS**（A1 标题 clipped/afterList/初始 −1；A2 focusin 升 0；A3 shift+Tab 落 `li.conversation-item-final` 且 scrollTop 未动 = preventScroll；A4 前向 Tab 不落标题——终态 tabindex 回 0 是 keydown/focusin 配对的预期行为）；`vue-tsc` 退 0 · 单测 **1060/1060**（93 文件，基线不变）· `vite build` 退 0 · ui-contract **60/60**（+round-174 断言：标题模板 + focus 导航/focusout 摘除 + keydown/focusin 配对）；脱敏违规 0 · 链接+锚点 0/0 · 派生 drift 0。
+
+**未闭环**（详见 [round-174 §四](../rounds/round-174-latest-response-a11y-and-parity-recheck.md)）：导航层简化（桌面走可中断的导航状态模块，我们直取最后 final 块，无重试/回落）；流式中 shift+Tab 未构造真机用例；parity 未触及行的旧行号未逐一复核。
+
 ## round-173（按线程滚动状态跨会话持久化，未发布）
 
 **性质**：产品侧功能（桌面端 parity 表「滚动状态持久化」行收口；`useDesktopStatePersistence.ts` +~100 行、`ThreadConversation.vue` +~150/−8、单测 +7 例）。
