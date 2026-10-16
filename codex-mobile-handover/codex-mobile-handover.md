@@ -6,13 +6,13 @@
 
 | 项 | 值 |
 |---|---|
-| Git 分支 | `main`（**已同步 `origin/main`，落后 0**——v0.1.134 发版 docs 笔 `464918b9` 已于 2026-10-16 深夜经代理 `127.0.0.1:7890` 推送成功（`93bc411a..464918b9`）；tag `v0.1.134` 与 [GitHub Release](https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.134) 同步闭环）· 当前进度 **v0.1.134 发版** |
+| Git 分支 | `main`（**领先 1 笔待推**——v0.1.134 npm 上架回填笔随本提交落地；tag `v0.1.134` 与 [GitHub Release](https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.134) 已闭环，npm latest 已是 0.1.134）· 当前进度 **v0.1.134 发版** |
 | Dev 端口 | 4173 |
 | Dev 状态 | **未运行**（2026-10-16 21:4x 复测：本轮 vite dev server（5173，round-174 探针用）与 headless Edge 已全部结束；4173/4191 无监听）。**round-174（无障碍 Latest response + parity 复核）产品侧全绿**（`vue-tsc --noEmit` 退 0 · `vitest run` **1060/1060 / 93 文件** · `vite build` 退 0 · ui-contract **60/60**，+round-174 断言）＋真机探针 4 场景全过（标题 clipped/afterList、focusin 升 0、shift+Tab 落最后 final 块且 preventScroll、前向 Tab 不落标题） |
 | App-server | **dev server 未运行**（`4173` 无监听），**真机只读取证两次**：round-158 测 3 个新增客户端方法（**2 可用 + `thread/prediction/request` 未实现**，证据 `tmp/r158-rpc-probe.json`）；**round-159 做了全量普查** —— 对 **170** 个客户端方法逐方法发**从 schema 构造的合法参数**，得 **`OK 62 / IMPLEMENTED 86 / UNDETERMINED 13 / SKIPPED 5 / NOT_IMPLEMENTED 4`**，「已发布但未实现」由 1 个更正为 **4 个**（见该轮文档），证据 `tmp/probe-app-server-methods.json`，可复跑 `node scripts/probe-app-server-methods.cjs`。**round-161 未跑真机**（只改闸门脚本与文档）。版本口径见「工具链」；**测 codex 版本前先确认 `CODEXUI_CODEX_COMMAND` 指向哪一套**。**round-162 未跑真机**（只改 `--selftest` 夹具字面量并跑产品侧验证） |
 | 工具链 | Windows：pnpm **11.18.0** · Node **本会话 PATH 上是受管 v22.22.2**（仓库既往记录为 fnm 24.18.1，按实际 `node -v` 为准）· codex-cli **0.162.1**（PATH 上的 pnpm 全局 `@openai/codex`；**2026-10-14 20:17 读数**，当日 **19:48 由 0.160.1 升级而来**）· **仓库内 app-server schema 快照已升级到 0.162.1**（round-157 重生成，`node scripts/regen-app-server-schemas.cjs --check` ⇒ drift **0**；「此前停在 0.160.1」的发现见 [rounds/round-156-real-snapshot-table.md](rounds/round-156-real-snapshot-table.md) §八）· **round-158 已对 0.162.1 真机直接跑过 RPC**（`initialize` 自报 `…0.162.1 (Windows 10.0.19045; x86_64)`，隔离 home 与版本口径均由服务端自报确认）；**round-159 在同一版本上做了 170 个方法的逐方法普查**（同一隔离纪律，实测零残留） |
 | 最近提交 | **随本文件所在提交落地**（提交无法包含自身哈希，故本行不写字面哈希 —— 与 [sections/commit-history.md](sections/commit-history.md) 的既有体例一致）；其前一个是 `93bc411a`（v0.1.134 bump：package.json 0.1.133→0.1.134，1 文件 ±1） |
-| npm `latest` | **`codex-mobile-re@0.1.134`**（**npm 待维护者 publish**，回填上架时刻/shasum 体例同 round-171 段；GitHub Release/tag 已闭环，见台账 v0.1.134 发布段）· 0.1.133（发布时刻 `2026-10-15T09:21:54.356Z`，shasum `54d23390fa86cd71c2504f9ab3e5012b2c694036`）已归档台账 |
+| npm `latest` | **`codex-mobile-re@0.1.134`**（发布时刻 `2026-10-16T14:23:49.383Z` ＝北京 22:23:49，shasum `28c04d3feb2a2699f5e63e912499506f4d7f03e2` 与下载 tarball 复算 sha1 逐位一致；范围 = round-172~175 滚动工程收口 + parity 清零，见台账 v0.1.134 发布段与 tag `v0.1.134`）· 0.1.133（发布时刻 `2026-10-15T09:21:54.356Z`，shasum `54d23390fa86cd71c2504f9ab3e5012b2c694036`）已归档台账 |
 
 > **本表是「真快照」**（只记当前值），字段口径见 [handover-writing-guide.md](handover-writing-guide.md) §2.1。它自 round-116 起曾退化成「一行一轮」的追加式日志（Git 分支 / Dev 状态 / 发布记录共 62 行），且自 round-140 后再未回填（索引已到 round-155）；**round-156 已把这 62 行原文一条不删地归档到 [sections/snapshot-table-archive.md](sections/snapshot-table-archive.md)**。
 
