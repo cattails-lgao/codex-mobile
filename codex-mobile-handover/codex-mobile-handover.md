@@ -6,13 +6,13 @@
 
 | 项 | 值 |
 |---|---|
-| Git 分支 | `main`（已同步 `origin/main`，落后 0）· 当前进度 **round-163** |
+| Git 分支 | `main`（**领先 origin/main 2 笔待推**——2026-10-16 出网受阻：直连 TLS 握手失败、env 代理 CONNECT 502，本机无代理在听；推送挂起，恢复后单次重试）· 当前进度 **round-172** |
 | Dev 端口 | 4173 |
-| Dev 状态 | **未运行**（2026-10-15 00:01 复测：全无监听（round-163 的隔离 home dev server 与 headless Edge 已全部结束）。**round-163（批 3b 窗口化）产品侧三项全绿**（`vue-tsc --noEmit` 退 0 · `vitest run` **1019/1019 / 88 文件**（+21 例窗口化单测） · `vite build` 退 0）⇒ 收掉 round-160 §六.①「未跑产品侧构建与单测」（round-158/159/160/161 连续四轮推迟） |
+| Dev 状态 | **未运行**（2026-10-16 20:3x 复测：5173/4173/4191 全无监听；本轮隔离 home dev server 与 headless Edge 已全部结束）。**round-172（前置插入保位）产品侧三项全绿**（`vue-tsc --noEmit` 退 0 · `vitest run` **1053/1053 / 92 文件** · `vite build` 退 0）＋真机探针 6 场景全过（冷翻页锚漂移 −0.5px、scrollTop 终值精确、甩顶自洽、跳最新 dist=0） |
 | App-server | **dev server 未运行**（`4173` 无监听），**真机只读取证两次**：round-158 测 3 个新增客户端方法（**2 可用 + `thread/prediction/request` 未实现**，证据 `tmp/r158-rpc-probe.json`）；**round-159 做了全量普查** —— 对 **170** 个客户端方法逐方法发**从 schema 构造的合法参数**，得 **`OK 62 / IMPLEMENTED 86 / UNDETERMINED 13 / SKIPPED 5 / NOT_IMPLEMENTED 4`**，「已发布但未实现」由 1 个更正为 **4 个**（见该轮文档），证据 `tmp/probe-app-server-methods.json`，可复跑 `node scripts/probe-app-server-methods.cjs`。**round-161 未跑真机**（只改闸门脚本与文档）。版本口径见「工具链」；**测 codex 版本前先确认 `CODEXUI_CODEX_COMMAND` 指向哪一套**。**round-162 未跑真机**（只改 `--selftest` 夹具字面量并跑产品侧验证） |
 | 工具链 | Windows：pnpm **11.18.0** · Node **本会话 PATH 上是受管 v22.22.2**（仓库既往记录为 fnm 24.18.1，按实际 `node -v` 为准）· codex-cli **0.162.1**（PATH 上的 pnpm 全局 `@openai/codex`；**2026-10-14 20:17 读数**，当日 **19:48 由 0.160.1 升级而来**）· **仓库内 app-server schema 快照已升级到 0.162.1**（round-157 重生成，`node scripts/regen-app-server-schemas.cjs --check` ⇒ drift **0**；「此前停在 0.160.1」的发现见 [rounds/round-156-real-snapshot-table.md](rounds/round-156-real-snapshot-table.md) §八）· **round-158 已对 0.162.1 真机直接跑过 RPC**（`initialize` 自报 `…0.162.1 (Windows 10.0.19045; x86_64)`，隔离 home 与版本口径均由服务端自报确认）；**round-159 在同一版本上做了 170 个方法的逐方法普查**（同一隔离纪律，实测零残留） |
-| 最近提交 | **随本文件所在提交落地**（提交无法包含自身哈希，故本行不写字面哈希 —— 与 [sections/commit-history.md](sections/commit-history.md) 的既有体例一致）；其前一个是 `b9c81057`（round-163 代码笔：批 3b 折叠态 warm 轮窗口化 —— `ThreadConversation.vue` +162/−1 + 新增 `src/utils/warmTurnWindow.ts` 与 21 例单测）。再前一个是 `527bd5b5`（round-162 首笔：`--selftest` 夹具改用合成地址 —— 让 round-161 脱敏掉的那条真实 tailnet 地址全仓零出现）· 上轮交接文档笔 `2a1f618b` / round-161 夹具笔 `fa846b59` |
-| npm `latest` | **`codex-mobile-re@0.1.132`**（`2026-10-14T06:39:37.911Z` ＝北京 14:39:37，shasum `a6fd1bdb797cf441789f5e024b5cb32a5884c26b`，tarball 54 文件 / unpacked 5,155,655 B）· **线上 `codex.arderpanada.top` 仍是 0.1.131 构建，待重新部署** |
+| 最近提交 | **随本文件所在提交落地**（提交无法包含自身哈希，故本行不写字面哈希 —— 与 [sections/commit-history.md](sections/commit-history.md) 的既有体例一致）；其前一个是 `d3cf55eb`（round-172 代码笔：前置插入滚动保位——哨兵锚增量补偿 + `overflow-anchor:none`，`ThreadConversation.vue` +162/−7） |
+| npm `latest` | **`codex-mobile-re@0.1.133`**（发布时刻 `2026-10-15T09:21:54.356Z` ＝北京 17:21:54，shasum `54d23390fa86cd71c2504f9ab3e5012b2c694036`；范围 = 批 0–4 特性批次，见台账 round-171 段与 tag `v0.1.133`）· 0.1.132 时期数据已归档台账 |
 
 > **本表是「真快照」**（只记当前值），字段口径见 [handover-writing-guide.md](handover-writing-guide.md) §2.1。它自 round-116 起曾退化成「一行一轮」的追加式日志（Git 分支 / Dev 状态 / 发布记录共 62 行），且自 round-140 后再未回填（索引已到 round-155）；**round-156 已把这 62 行原文一条不删地归档到 [sections/snapshot-table-archive.md](sections/snapshot-table-archive.md)**。
 
@@ -312,4 +312,4 @@ macOS 特有差异：`resolveCodexCommand()` 非 Windows 分支按 `codex`（PAT
 
 ---
 
-*codexapp · 交接文档 · 2026-10-15（**round-163：批 3b 折叠态 warm 轮窗口化 —— 产品侧重新开工的第一轮** —— **零产品代码改动**。① **自相矛盾**：round-161 把真实 tailnet 地址从 2 个文档删掉，却在同轮的下一笔把同一字面量写成 `--selftest` 夹具（`scripts/check-handover-desensitization.cjs`）⇒ 地址仍在公开 fork 的 HEAD 里；本轮换 `<合成地址>`（仍在 `100.64-127` 段内、断言值与用例覆盖不变），`git grep` 零命中、`--selftest` 仍 19 例全过。② **产品侧基线复验**：补跑连续四轮推迟的类型检查 / 全量单测 / 构建 —— `vue-tsc --noEmit` 退 0 · `vitest run` **998/998 / 87 文件** · `vite build` 退 0 ⇒ 基线未漂）**；上一轮 **round-161：脱敏闸门补「私网 / Tailscale 主机地址」类（11 → 12 类）**；更早轮次见 [sections/commit-history.md](sections/commit-history.md) · 内容已脱敏*
+*codexapp · 交接文档 · 2026-10-16（**round-172：前置插入滚动保位——哨兵锚增量补偿 + `overflow-anchor:none`** —— `loadMoreAbove` 弃整页总高度差（流式并发误补）、`nextColdPage` 从零补偿转正，两路统一为 hot 区顶哨兵 `li.conversation-hot-anchor` 的增量多结算（两次 flush 拆分免疫、基线取写入后坐标）；判据书 §三·B「加载历史保位 / 原生滚动锚定」两行收口。验证：单测 **1053/1053 / 92 文件**、真机探针冷翻页漂移 −0.5px）**；上一轮 **round-171：v0.1.133 发版（批 0–4 特性批次，npm `latest`）**；round-164~170 见 [sections/commit-history.md](sections/commit-history.md)（主入口快照区在该区间未同步、停留 round-163，本轮已带至当前）· 内容已脱敏*

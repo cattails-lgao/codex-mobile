@@ -12,7 +12,7 @@
 
 | 域 | 谁更好 | 一句话依据 |
 | --- | --- | --- |
-| 滚动几何 / 防跳动 | **他们** | 距底坐标 + 按轮锚定补偿；我们用「总高度差」，流式增长时会误补 |
+| 滚动几何 / 防跳动 | **他们** | 距底坐标 + 按轮锚定补偿；我们用「总高度差」，流式增长时会误补 **（round-172 补记：两类前置插入已换热区哨兵锚增量补偿，此差距收口；查表式仍登记为绝对定位虚拟化时代的终局）** |
 | DOM 体积 | **他们**（小胜） | 窗口化**无级差**；我们靠 warm 折叠卡压低，但 hot 区仍是 30 轮全量 **（round-165 补记：hot 区亦已窗口化，此项差距已闭合，见批 3）** |
 | 历史保真 | **他们** | 他们无损；老轮次要「点开折叠卡」才看全文 |
 | 读路径健壮性 | **我们** | round-143 的「索引对账」是我们独有的失败模式与修复，他们不需要 |
@@ -53,8 +53,8 @@
 | 高度来源 | 实测缓存 `measuredHeightsByKey` + 声明估算 + 兜底 280，DPR 对齐 | 浏览器自然高度，不缓存 **（round-165 补记：hot 区已有 RO 实测高度缓存 `hotBlockSpecs`/`hotHeightCache`）** | 他们更好（可预测、无抖动）；**差距已大幅收窄** |
 | 滚动坐标 | `distanceFromBottomPx`（距底） | `scrollTop`（从顶）+ `LOAD_MORE_SCROLL_THRESHOLD_PX = 200`（`:999`） | **他们更好**——追加内容时距底不变 ⇒ 天然不跳 |
 | 贴底 | `flex-col-reverse` + 距底 API | `scrollTop = scrollHeight` + `anchor.scrollIntoView({block:'end'})`（`:1872-1873`），配 `bottomLockFramesLeft` 连打 6 帧（`:1917`） | 我们这套是**为「无虚拟化」调出来的**，能用但脆 |
-| 加载历史保位 | 按**某一轮**锚定补偿（`computeScrollDistanceForAnchor`） | `scrollTop = prev + (scrollHeight - prevScrollHeight)`（`:1954`）——**整页总高度差** | **他们更好**：我们一旦底部在增长（流式）就会误补 |
-| 原生滚动锚定 | 显式 `[overflow-anchor:none]`，自己接管 | **未处理**（全仓 grep 零命中） | 他们更好（可预测） |
+| 加载历史保位 | 按**某一轮**锚定补偿（`computeScrollDistanceForAnchor`） | **（round-172 已收口）**哨兵锚（`li.conversation-hot-anchor`）增量多结算：`nextTick → rAF×2 → nextTick` 各结一次自上次以来的位移，基线取写入后坐标，对 3b 两次 flush 拆分不敏感 | 打平（机制不同：他们按布局数据查表，我们按恒渲染锚读实时位移；效果等价，真机 S1 漂移 −0.5px / S2 自洽） |
+| 原生滚动锚定 | 显式 `[overflow-anchor:none]`，自己接管 | **（round-172 已收口）**`.conversation-list` 显式 `overflow-anchor: none`，保位唯一来源 = 自有哨兵锚补偿 | 打平 |
 | 加载历史触发 | 距底 ≤ `max(clientHeight, 64)` 时 **while 连打** | `hasColdTurns → nextColdPage()` / `hasMorePersistedAbove → loadMoreAbove()`（`:2084-2089`），另有手动按钮（`:29-43`） | 他们对（自动、连续）；我们对（可控、有冷页语义） |
 | 卸载保护 | `firstProtectedItemId = turnItemIds.at(-500)`、距底 > 24px 才上报 | 无窗口化 ⇒ 无此问题；但 round-143 要求**回退点必须仍在渲染集内** | 打平（两个不同机制的同一类约束） |
 | 滚动状态持久化 | `{renderedWindow, turnHeightsByKey}` 跨会话恢复 | 无 | 他们更好（重开不「先估后跳」） |

@@ -450,6 +450,19 @@
 - **坑**：同文档 hash goto 不重载文档（探针每场景带 `?r169s=<n>`）；`thread/turns/list` 同时服务 missing 预检与 revert 水合 ⇒ 探针按 `state.reverted` 动态响应。
 - **批 4 四项全部落地**（#1/#3 round-168、#2/#4 round-169）。详见 [round-169](../rounds/round-169-batch4-inline-edit-and-edit-resend.md)。
 
+## round-172（前置插入滚动保位：哨兵锚增量补偿 + `overflow-anchor:none`，未发布）
+
+**性质**：产品侧修复（`ThreadConversation.vue` 单文件 +162/−7，测试文档 + 索引共 4 文件）。分叉说明：同名事项曾在本地分叉线做过一版（`0d4df989`/`6f0742a2`，未推送、已弃），本轮在远端 3c 后架构上重做并升级锚选点。
+
+**问题**：`loadMoreAbove` 用**整页总高度差**保位——`await` 期间底部流式增长时把不该补的增量也补进去；`nextColdPage` **零补偿**——一直靠浏览器原生滚动锚定隐形兜底。判据书 §三·B 两行「他们更好」的欠账。
+
+**修复**：① `.conversation-list` 显式 `overflow-anchor: none`（桌面端 26.1013 asar 取证实锤这是前提：`reply-chain-transcript` / `thread-scroll-container` 均如此），保位唯一来源 = 自有补偿；② 锚定元素增量多结算：锚 = hot 区顶哨兵 `li.conversation-hot-anchor`（恒渲染、顶边 = warm 底界、在前插点下方 ⇒ 位移 = 插入高度、对流式追加免疫），`nextTick → rAF×2 → nextTick` 各结一次自上次以来的位移，**基线取写入后坐标**（否则重复补偿），同批连发触发槽位去重，线程切换守卫 + 卸载丢弃。
+
+**提交**：`d3cf55eb`（代码 + 测试文档）＋ **本段所在提交**（docs；本文件 1264 → 1277 行）。
+
+**验证基线**：`vue-tsc` 退 0 · 单测 **1053/1053**（92 文件）· `vite build` 退 0；真机探针（msedge headless + 隔离 home + 合成 60 轮）：冷翻页锚漂移 **−0.5px**、`scrollTop` 终值 300→1105（= 300+插入 805 精确）；甩顶自动连翻 `scrollTop` 终值 = 插入量 805、漂移 399.5 ≈ 期望 400 自洽；跳到最新 dist=0；pageerror 0。脱敏 0 · `--selftest` 全过 · 链接 0/0 · 派生 drift 0。端口复核（2026-10-16 20:3x）全无监听。
+
+**未闭环**：**未推送**——2026-10-16 晚出网受阻（直连 TLS 握手失败、env 代理 CONNECT 502，本机无代理进程在听），按「停下来汇报」纪律挂起，待网络恢复后单次重试；查表式补偿（`turnVirtualizer.computeScrollDistanceForAnchor` + 布局差分）登记为绝对定位虚拟化时代的终局；「前插 + 贴底跟随」真机并发用例未单独构造（依赖 round-164 RO 锁底先行）；主入口快照区滞后（round-164~171 未同步，仍停在 round-163 / npm 0.1.132）本轮已一并带到当前。
 ## round-171（v0.1.133 发版：批 0–4 特性批次，发布闭环）
 
 - **范围**：`41737a45`（v0.1.132 bump）→ 头 = **54 提交**（round-148 ~ round-170），**194 文件 +15681/−682**。**`src/server/**` 零改动** ⇒ `SHARED_BRIDGE_VERSION` 不动（保持 v7）。
