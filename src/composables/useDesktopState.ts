@@ -1182,6 +1182,34 @@ export function useDesktopState() {
     savePersistedTurnDurationMap(persistedTurnDurationsByThreadId.value)
   }
 
+  // round-177：回退/revert 成功后清掉被移除轮次的耗时条目。不清的话
+  // insertPersistedTurnDurations 会继续为已不存在的轮次合成「Worked for Xs」
+  // 孤儿行（带着已删轮次的 turnId），把下游按 turnId 判定目标轮是否还在的
+  // 逻辑（编辑保存守卫）带偏。存档镜像只上行增量（round-77），删除不回传
+  // 服务端 sidecar——但载入合并出的孤儿行会被 insertPersistedTurnDurations
+  // 的「turn 须在列表中」判据拦下，不会再进消息流。
+  function forgetTurnDurations(threadId: string, removedTurnIds: string[]): void {
+    if (!threadId || removedTurnIds.length === 0) return
+    const perThread = persistedTurnDurationsByThreadId.value[threadId]
+    if (!perThread) return
+    const removed = new Set(removedTurnIds.map((id) => id.trim()).filter((id) => id.length > 0))
+    if (removed.size === 0) return
+    const remaining: Record<string, number> = {}
+    for (const [turnId, durationMs] of Object.entries(perThread)) {
+      if (!removed.has(turnId)) remaining[turnId] = durationMs
+    }
+    if (Object.keys(remaining).length === Object.keys(perThread).length) return
+    if (Object.keys(remaining).length === 0) {
+      persistedTurnDurationsByThreadId.value = omitKey(persistedTurnDurationsByThreadId.value, threadId)
+    } else {
+      persistedTurnDurationsByThreadId.value = {
+        ...persistedTurnDurationsByThreadId.value,
+        [threadId]: remaining,
+      }
+    }
+    savePersistedTurnDurationMap(persistedTurnDurationsByThreadId.value)
+  }
+
   // round-128：`keepDeferredLiveCommands` 只由 `turn/completed` 一处传入——它表示
   // 「live 命令要留到收尾刷新把持久化副本写进 messages 之后再清」。其余调用点
   // （含 `loadMessages` 内部那次 `setThreadInProgress(threadId, false)`）保持原语义。
@@ -3452,6 +3480,8 @@ export function useDesktopState() {
           `[rollback] ${threadId}: turn ${beforeTurnId} is already gone on the server; reconciling locally instead of sending thread/revert`,
         )
         dropPersistedTurnLocally(threadId, beforeTurnId)
+        // round-177：本地对齐同样清掉耗时存档（孤儿 worked 行同源）。
+        forgetTurnDurations(threadId, [beforeTurnId])
         pendingThreadsRefresh = true
         try {
           await loadMessages(threadId, { force: true })
@@ -3482,6 +3512,8 @@ export function useDesktopState() {
       setLiveAgentMessagesForThread(threadId, [])
       clearLiveReasoningForThread(threadId)
       dropPersistedReasoningForRemovedTurns(threadId, [...removedTurnIds, beforeTurnId], turnIndex)
+      // round-177：被移除轮次的耗时存档一并清掉（孤儿「Worked for Xs」行根因）。
+      forgetTurnDurations(threadId, [...removedTurnIds, beforeTurnId])
       if (liveCommandsByThreadId.value[threadId]) {
         liveCommandsByThreadId.value = omitKey(liveCommandsByThreadId.value, threadId)
       }

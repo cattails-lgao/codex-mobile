@@ -4402,7 +4402,17 @@ async function onEditMessageResend(payload: { turnId: string; text: string }): P
   const targetTurnId = payload.turnId.trim()
   if (!selectedThreadId.value || !targetTurnId || payload.text.trim().length === 0) return
   await rollbackSelectedThread(targetTurnId)
-  if (filteredMessages.value.some((message) => (message.turnId?.trim() ?? '') === targetTurnId)) {
+  // round-177：守卫只认 user/assistant 真实消息——系统合成行（worked 耗时行、
+  // turnError 等）也可能带着目标轮的 turnId（round-65 的耗时存档在 revert 后
+  // 不会清），把合成行算进去会把「回退成功」误判成失败（round-176 的实测复现：
+  // 编辑保存后不重发、只剩两条孤儿「Worked for Xs」行）。
+  const rolledBackTurnStillVisible = filteredMessages.value.some((message) => {
+    if ((message.turnId?.trim() ?? '') !== targetTurnId) return false
+    if (message.role !== 'user' && message.role !== 'assistant') return false
+    const type = normalizeMessageType(message.messageType, message.role)
+    return type !== 'worked' && type !== 'turnActivity.live' && type !== 'turnError.live' && type !== 'agentReasoning.live'
+  })
+  if (rolledBackTurnStillVisible) {
     // round-176：此前这里静默 return——回退失败（服务端拒绝/缓存脱节等）时用户点
     // 「保存」毫无反馈、消息原地不动，观感就是「编辑功能坏了」。回退路径自身已在
     // error 里放了原因；若 error 为空（例如回退被并发守卫吞掉）也要给一条显式提示。

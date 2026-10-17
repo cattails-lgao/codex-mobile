@@ -38,15 +38,28 @@ describe('sumTurnDurations', () => {
 })
 
 describe('insertPersistedTurnDurations', () => {
-  it('为每个持久化耗时 turn 补一条 worked 消息，并保持原消息顺序', () => {
+  it('为列表中存在的 turn 补一条 worked 消息，并保持原消息顺序', () => {
     const messages = [plain('u', 'user', 't1'), plain('a', 'assistant', 't1')]
-    const next = insertPersistedTurnDurations(messages, { t1: 150_000, t2: 20_000 })
+    const next = insertPersistedTurnDurations(messages, { t1: 150_000 })
     expect(next.slice(0, 2)).toEqual(messages)
     const added = next.slice(2)
-    expect(added).toHaveLength(2)
+    expect(added).toHaveLength(1)
     expect(added[0]).toMatchObject({ messageType: 'worked', turnId: 't1', durationMs: 150_000 })
-    expect(added[1]).toMatchObject({ messageType: 'worked', turnId: 't2', durationMs: 20_000 })
-    expect(sumTurnDurations(next)).toEqual({ t1: 150_000, t2: 20_000 })
+    expect(sumTurnDurations(next)).toEqual({ t1: 150_000 })
+  })
+
+  it('round-177：turn 已不在消息列表（被回退移除）时不再合成 worked 孤儿行', () => {
+    // revert 后列表只剩别的轮次；耗时存档里被删轮次的条目不得再物化成消息，
+    // 否则下游按 turnId 判定「目标轮还在」的编辑守卫会误判回退失败。
+    const messages = [plain('u', 'user', 'kept-1'), plain('a', 'assistant', 'kept-1')]
+    const next = insertPersistedTurnDurations(messages, {
+      'removed-1': 12_000,
+      'removed-2': 20_000,
+      'kept-1': 5_000,
+    })
+    const added = next.slice(messages.length)
+    expect(added).toHaveLength(1)
+    expect(added[0]).toMatchObject({ messageType: 'worked', turnId: 'kept-1', durationMs: 5_000 })
   })
 
   it('跳过已有 worked 消息的 turn（live 摘要已插入时不重复），忽略非法耗时', () => {

@@ -629,9 +629,19 @@ export function insertPersistedTurnDurations(
       existingTurnIds.add(message.turnId)
     }
   }
+  // round-177：turn 已不在列表（被回退/revert 移除、或分页冷页未加载）时不再为它
+  // 合成 worked 行。此前只要存档里有该 turnId 的耗时就追加——回退后列表里会残留
+  // 一条仍带着已删轮次 turnId 的「Worked for Xs」系统行，下游按 turnId 判定
+  // 「目标轮还在」的逻辑（App.vue 的编辑保存守卫）因此误判回退失败、拒绝重发。
+  const listedTurnIds = new Set<string>()
+  for (const message of messages) {
+    const turnId = message.turnId?.trim() ?? ''
+    if (turnId) listedTurnIds.add(turnId)
+  }
   const extra: UiMessage[] = []
   for (const [turnId, durationMs] of Object.entries(turnDurations)) {
     if (!turnId || existingTurnIds.has(turnId)) continue
+    if (!listedTurnIds.has(turnId)) continue
     if (typeof durationMs !== 'number' || !Number.isFinite(durationMs) || durationMs <= 0) continue
     extra.push(buildTurnSummaryMessage({ turnId, durationMs: Math.round(durationMs) }))
     existingTurnIds.add(turnId)
