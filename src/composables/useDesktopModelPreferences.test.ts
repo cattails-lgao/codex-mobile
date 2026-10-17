@@ -1,6 +1,26 @@
 import { ref } from 'vue'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createDesktopModelPreferences } from './useDesktopModelPreferences'
+import { getAvailableModels, getCurrentModelConfig } from '../api/codexGateway'
+
+vi.mock('../api/codexGateway', () => ({
+  getAvailableModels: vi.fn(),
+  getCurrentModelConfig: vi.fn(),
+  setCodexSpeedMode: vi.fn(),
+}))
+
+const gatewayMocks = {
+  getAvailableModels: vi.mocked(getAvailableModels),
+  getCurrentModelConfig: vi.mocked(getCurrentModelConfig),
+}
+
+function modelsWithoutReasoning(...ids: string[]) {
+  return ids.map((id) => ({ id, supportedReasoningEfforts: null, defaultReasoningEffort: null }))
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+})
 
 function createPrefs() {
   return createDesktopModelPreferences({ selectedThreadId: ref('thread-1'), error: ref('') })
@@ -93,5 +113,54 @@ describe('useDesktopModelPreferences.applyFallbackModelSelection', () => {
     await prefs.applyFallbackModelSelection('')
 
     expect(changedThreadIds).toEqual([])
+  })
+})
+
+// round-176：provider-models 是外部往返，一次抖动/失败就会让线程正在用的模型从
+// 列表里消失。线程「自身键」里的显式选择不得因此被覆写成 config 默认（用户报障
+// 「线程用的模型会被切换到默认模型」的直接根因）；providerChanged 显式换源仍可覆写。
+describe('useDesktopModelPreferences.refreshModelPreferences', () => {
+  function mockConfig(model: string, providerId: string) {
+    gatewayMocks.getCurrentModelConfig.mockResolvedValue({
+      model,
+      providerId,
+      reasoningEffort: 'medium',
+      speedMode: 'standard',
+    })
+  }
+
+  it('keeps a thread-own selection that is missing from the refreshed list', async () => {
+    const prefs = createPrefs()
+    prefs.setSelectedModelIdForThread('thread-1', 'zen-model-a')
+    mockConfig('gpt-5.5', '')
+    gatewayMocks.getAvailableModels.mockResolvedValue(modelsWithoutReasoning('gpt-5.5', 'gpt-5.4-mini'))
+
+    await prefs.refreshModelPreferences({ includeProviderModels: false })
+
+    expect(prefs.readModelIdForThread('thread-1')).toBe('zen-model-a')
+    expect(prefs.selectedModelId.value).toBe('zen-model-a')
+    expect(prefs.availableModelIds.value).toContain('zen-model-a')
+  })
+
+  it('still falls back to the configured model when nothing is selected for the thread', async () => {
+    const prefs = createPrefs()
+    mockConfig('gpt-5.5', '')
+    gatewayMocks.getAvailableModels.mockResolvedValue(modelsWithoutReasoning('gpt-5.5', 'gpt-5.4-mini'))
+
+    await prefs.refreshModelPreferences({ includeProviderModels: false })
+
+    expect(prefs.selectedModelId.value).toBe('gpt-5.5')
+  })
+
+  it('keeps the thread model visible when the stale list lacks it (syncSelectedThreadModel)', async () => {
+    const prefs = createPrefs()
+    prefs.setSelectedModelIdForThread('thread-1', 'zen-model-a')
+    // 模拟陈旧列表：只有 codex 模型、没有线程正在用的 zen-model-a。
+    prefs.availableModelIds.value = ['gpt-5.5', 'gpt-5.4-mini']
+
+    prefs.syncSelectedThreadModel('thread-1')
+
+    expect(prefs.selectedModelId.value).toBe('zen-model-a')
+    expect(prefs.availableModelIds.value).toContain('zen-model-a')
   })
 })

@@ -6,6 +6,9 @@
   >
     <!-- round-106：turn 时间戳（0.157 #47114），hover 工具栏内以弱化文字展示时点。 -->
     <span v-if="timestamp" class="message-timestamp">{{ timestamp }}</span>
+    <!-- round-176：入口语义统一为「编辑」——按钮打开内联编辑框（保存即回退重发），
+         此前图标（ArrowBackUp）与文案（Rollback）都在说「回退」，与实际行为不符。
+         用户消息下仍是仅图标样式；其余角色补 Edit 文字。 -->
     <button
       v-if="showEdit"
       type="button"
@@ -14,8 +17,8 @@
       :title="t('Edit this message')"
       @click="$emit('edit')"
     >
-      <IconTablerArrowBackUp class="icon-svg message-rollback-icon" />
-      <span v-if="role !== 'user'" class="message-rollback-label">{{ t('Rollback') }}</span>
+      <IconTablerPencil class="icon-svg message-rollback-icon" />
+      <span v-if="role !== 'user'" class="message-rollback-label">{{ t('Edit') }}</span>
     </button>
     <button
       v-if="showFork"
@@ -47,9 +50,9 @@
 
 <script setup lang="ts">
 import { useUiLanguage } from '../../composables/useUiLanguage'
-import IconTablerArrowBackUp from '../icons/IconTablerArrowBackUp.vue'
 import IconTablerCopy from '../icons/IconTablerCopy.vue'
 import IconTablerGitFork from '../icons/IconTablerGitFork.vue'
+import IconTablerPencil from '../icons/IconTablerPencil.vue'
 
 withDefaults(defineProps<{
   role: string

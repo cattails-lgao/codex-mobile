@@ -443,6 +443,7 @@ const zhCN: Record<string, string> = {
   'Worktree setup failed': '工作树初始化失败',
   'Unable to create worktree. Try again or switch to Local project.': '无法创建工作树。请重试，或切换到本地项目。',
   'Edit': '编辑',
+  'Edit failed: the original message could not be rolled back. Try again.': '编辑保存失败：原消息未能回退。请重试。',
   'Edit automation': '编辑自动化',
   'image': '图片',
   'images': '图片',

@@ -4402,7 +4402,15 @@ async function onEditMessageResend(payload: { turnId: string; text: string }): P
   const targetTurnId = payload.turnId.trim()
   if (!selectedThreadId.value || !targetTurnId || payload.text.trim().length === 0) return
   await rollbackSelectedThread(targetTurnId)
-  if (filteredMessages.value.some((message) => (message.turnId?.trim() ?? '') === targetTurnId)) return
+  if (filteredMessages.value.some((message) => (message.turnId?.trim() ?? '') === targetTurnId)) {
+    // round-176：此前这里静默 return——回退失败（服务端拒绝/缓存脱节等）时用户点
+    // 「保存」毫无反馈、消息原地不动，观感就是「编辑功能坏了」。回退路径自身已在
+    // error 里放了原因；若 error 为空（例如回退被并发守卫吞掉）也要给一条显式提示。
+    desktopError.value = desktopError.value.trim().length > 0
+      ? desktopError.value
+      : t('Edit failed: the original message could not be rolled back. Try again.')
+    return
+  }
   await sendMessageToSelectedThread(payload.text, [], [], 'steer', [], undefined, undefined, 'edit_user_message')
 }
 

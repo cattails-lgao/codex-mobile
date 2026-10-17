@@ -154,6 +154,13 @@ export function createDesktopModelPreferences(deps: DesktopModelPreferencesDeps)
     const normalizedModelId = modelId.trim()
     if (availableModelIds.value.length === 0) return normalizedModelId
     if (normalizedModelId && availableModelIds.value.includes(normalizedModelId)) return normalizedModelId
+    // round-176：线程模型不在（可能陈旧/未含 provider 的）列表里时，保留线程真实
+    // 模型并让它可见，而不是把显示值悄悄换成第一个可用模型——后者正是「切线程时
+    // 模型显示被换成默认」的直接来源。真正的不可用模型由发送期回退兜底。
+    if (normalizedModelId) {
+      ensureAvailableModelIds(normalizedModelId)
+      return normalizedModelId
+    }
     return availableModelIds.value[0] ?? ''
   }
 
@@ -335,6 +342,15 @@ export function createDesktopModelPreferences(deps: DesktopModelPreferencesDeps)
       availableModelIds.value = nextModelIds
 
       const currentModelInNewList = normalizedSelectedModelId && modelIds.includes(normalizedSelectedModelId)
+      // round-176：线程「自身键」里已有的模型选择不因一次列表刷新缺项就被覆写。
+      // provider-models 是外部往返（5s 超时、失败还要缓存），一次抖动就会让线程
+      // 正在用的模型从 modelIds 里消失；此前的行为是直接把线程模型改写成
+      // config 默认（或列表第一个）——这就是「线程用的模型会被切换到默认模型」。
+      // 显式选择属于用户意图，保留它并让它继续在列表可见；发送期的 400 由
+      // startTurnForThread 的回退路径兜底（round-72 语义）。providerChanged（用户
+      // 显式切换了 provider）仍允许覆写；新线程兜底键（非线程自身）维持旧判据
+      // （陈旧的非 Codex 模型要从 Codex 列表里剔除，见 useDesktopState.test.ts）。
+      const threadOwnSelection = hasThreadOwnModelSelection(deps.selectedThreadId.value)
       if (!normalizedSelectedModelId || !currentModelInNewList || options?.providerChanged) {
         if (options?.providerChanged && nextModelIds.length > 0) {
           if (providerScopedModelId && modelIds.includes(providerScopedModelId)) {
@@ -344,6 +360,8 @@ export function createDesktopModelPreferences(deps: DesktopModelPreferencesDeps)
           } else {
             setSelectedModelId(nextModelIds[0])
           }
+        } else if (threadOwnSelection && normalizedSelectedModelId) {
+          ensureAvailableModelIds(normalizedSelectedModelId)
         } else if (targetProviderId === normalizedProviderId && normalizedConfiguredModelId && nextModelIds.includes(normalizedConfiguredModelId)) {
           setSelectedModelId(currentConfig.model)
         } else if (nextModelIds.length > 0) {

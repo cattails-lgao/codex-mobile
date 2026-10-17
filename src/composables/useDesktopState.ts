@@ -2535,7 +2535,12 @@ export function useDesktopState() {
 
     try {
       await loadMessages(threadId)
-      await refreshModelPreferences({ includeProviderModels: true })
+      // round-176：模型偏好刷新不再阻塞选线程。refreshModelPreferences 里
+      // provider-models 是外部往返（冷缓存实测 1–1.5s，超时上限 5s），此前串在
+      // 选线程关键路径上——切线程卡顿 + 模型列表迟迟不出/只剩默认的直接来源之一。
+      // 模型显示值由 setSelectedThreadId → syncSelectedThreadModel 同步给出
+      // （读本地映射，不等网络）；刷新完成后列表/推理档位自动补齐。
+      void refreshModelPreferences({ includeProviderModels: true })
       void refreshSkills()
       return 'ok'
     } catch (unknownError) {
@@ -3486,7 +3491,13 @@ export function useDesktopState() {
       pendingThreadsRefresh = true
       await syncFromNotifications()
     } catch (unknownError) {
-      error.value = unknownError instanceof Error ? unknownError.message : 'Failed to rollback thread'
+      const errorMessage = unknownError instanceof Error ? unknownError.message : 'Failed to rollback thread'
+      error.value = errorMessage
+      // round-176：`error` 在 UI 上没有直接渲染位（只作为设置页反馈按钮的触发器），
+      // 回退失败此前对用户完全不可见——点回退/编辑保存「毫无反应」，即线上报障的
+      // 「编辑功能无法正常使用」。补一条会话内的 turn error 行（与发送失败同通道），
+      // 下一次发送会自然清掉。
+      setTurnErrorForThread(threadId, errorMessage)
       // round-141：回退失败最常见的原因就是「本地缓存与服务端脱节」（目标轮在服务端已
       // 不存在，或桥层缓存与 rollout 不一致）。失败后必须做一次**非 silent** 的重读，
       // 把列表拉回服务端的真实状态；否则那条残留消息会一直留在界面上，用户反复点击、

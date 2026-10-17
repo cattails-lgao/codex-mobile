@@ -31,7 +31,12 @@ export type AvailableModel = {
 }
 
 const PROVIDER_MODELS_FETCH_TIMEOUT_MS = 5_000
-const PROVIDER_MODELS_CACHE_TTL_MS = 30_000
+// round-176：成功结果长缓存（原 30s——每过半分钟下一次选线程就要重付一次
+// 1–1.5s 的外部 provider 往返，是「模型列表有延迟」的来源之一）；过期后先回陈旧
+// 值并后台重验（stale-while-revalidate）；失败结果只短负缓存（原失败也缓存满
+// 30s，导致 provider 抖动后长达半分钟「列表只剩默认模型」）。
+const PROVIDER_MODELS_CACHE_TTL_MS = 5 * 60_000
+const PROVIDER_MODELS_NEGATIVE_CACHE_TTL_MS = 3_000
 const providerModelsCache = new Map<string, { fetchedAt: number; result: { ids: string[], exclusive: boolean } | null }>()
 // round-77：同一 provider 的并发调用共享同一个 in-flight 请求。缓存只在响应回来
 // 后才写入，之前首屏的多个调用方会各自 miss、各发一次（实测 x4，每次 1–1.5s）。
@@ -131,14 +136,8 @@ export async function setCustomProvider(
   return await response.json() as { ok: boolean }
 }
 
-async function fetchProviderModelIds(providerId?: string): Promise<{ ids: string[], exclusive: boolean } | null> {
-  const normalizedProviderId = providerId?.trim() ?? ''
-  const cacheKey = normalizedProviderId
-  const cached = providerModelsCache.get(cacheKey)
-  if (cached && Date.now() - cached.fetchedAt < PROVIDER_MODELS_CACHE_TTL_MS) {
-    return cached.result
-  }
-  const inflight = providerModelsInflight.get(cacheKey)
+async function requestProviderModelIds(normalizedProviderId: string): Promise<{ ids: string[], exclusive: boolean } | null> {
+  const inflight = providerModelsInflight.get(normalizedProviderId)
   if (inflight) return inflight
 
   const pending = (async (): Promise<{ ids: string[], exclusive: boolean } | null> => {
@@ -169,16 +168,35 @@ async function fetchProviderModelIds(providerId?: string): Promise<{ ids: string
     } catch {
       // Keep Codex usable when the provider-models endpoint is unavailable.
     }
-    providerModelsCache.set(cacheKey, { fetchedAt: Date.now(), result })
+    providerModelsCache.set(normalizedProviderId, { fetchedAt: Date.now(), result })
     return result
   })()
 
-  providerModelsInflight.set(cacheKey, pending)
+  providerModelsInflight.set(normalizedProviderId, pending)
   try {
     return await pending
   } finally {
-    providerModelsInflight.delete(cacheKey)
+    providerModelsInflight.delete(normalizedProviderId)
   }
+}
+
+async function fetchProviderModelIds(providerId?: string): Promise<{ ids: string[], exclusive: boolean } | null> {
+  const normalizedProviderId = providerId?.trim() ?? ''
+  const cacheKey = normalizedProviderId
+  const cached = providerModelsCache.get(cacheKey)
+  if (cached) {
+    const ttl = cached.result === null ? PROVIDER_MODELS_NEGATIVE_CACHE_TTL_MS : PROVIDER_MODELS_CACHE_TTL_MS
+    if (Date.now() - cached.fetchedAt < ttl) {
+      return cached.result
+    }
+    // round-176：成功值过期——立即回陈旧值，后台重验（失败不回滚陈旧值）。
+    if (cached.result !== null) {
+      void requestProviderModelIds(cacheKey).catch(() => undefined)
+      return cached.result
+    }
+    // 负缓存过期：无旧值可用，走同步重新取（下方共享 in-flight 路径）。
+  }
+  return await requestProviderModelIds(cacheKey)
 }
 
 function normalizeAvailableModel(value: unknown): AvailableModel | null {
