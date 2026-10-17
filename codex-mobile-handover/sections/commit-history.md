@@ -458,6 +458,19 @@
 - **发布闭环（2026-10-16 回填）**：`codex-mobile-re@0.1.134` 已由维护者 `pnpm publish` 至 npm 官方源并成为 `latest`（**发布时刻 `2026-10-16T14:23:49.383Z`** ＝北京 22:23:49；shasum `28c04d3feb2a2699f5e63e912499506f4d7f03e2` 与下载 tarball 复算 sha1 逐位一致；integrity `sha512-oqflN…QGsZvckAIQaxzh69IZzX4kGP0S0gwIR57WO5vqxQUftv5Dql4dLpDqkMw==`；tarball 1,666,965 B / unpacked 5,204,920 B / 54 文件）。publish 后 registry 传播实测：**版本端点约 4 分钟内持续 404 后转 200**（较 round-171 的 ~1 分钟更长），核验时勿以单次查询定论。
 - **生效条件**：前端生效需站点重部署（`vite build` + `tsup`）。
 
+## round-177（编辑保存被「孤儿耗时行」误判回退失败 ⇒ 重发被吞，未发布）
+
+**性质**：round-176 编辑路径的续修轮（用户复测「编辑我点击发送的时候，像没有发出去一样」）。真机取证升级为三层：协议层（`tmp/r177-edit-real.cjs`，真 app-server 0.162.1 + 隔离 home + 真实 relay provider，零拦截——协议全链路通，顺带闭环 round-176 遗留的「turnTrigger 服务端行为未验」）⇒ UI 层复现（`tmp/r177-ui-probe.cjs`，vite dev + `CODEX_HOME` 隔离 home 挂真 app-server：保存后无 turn/start、列表 rows=0）⇒ 状态层定位（读 `setupState`：`desktopError="Edit failed…"`，`filteredMessages` 只剩两条带已删轮次 turnId 的孤儿 "Worked for Xs" 行）。
+
+**根因**：round-65 轮耗时存档（thread-turn-durations）revert 后不清被移除轮次条目 ⇒ `insertPersistedTurnDurations` 无条件为该 turnId 合成 worked 系统行 ⇒ App.vue 编辑保存守卫按 turnId 匹配不分消息类型 ⇒ 误判「回退失败」⇒ 不重发；报错在 `desktopError`（UI 无渲染位）。
+
+**改动**：耗时行合成加「turn 须在列表中」判据（孤儿任何来源都拦下，含刷新后 sidecar 回灌）；守卫只认 user/assistant 真实消息；`rollbackSelectedThread` 成功/本地对齐路径清耗时存档（`forgetTurnDurations`，与 round-142 thinking 清理成对）。
+
+**提交**：代码笔 `2b08696e`（fix(chat)，4 文件 +71/−6）+ **本段所在提交**（docs；主入口快照/历轮/页脚 + 裸 LF 清理 + 本文件 1340 → 1353 行 + round 文档新增）。
+
+**验证**：tsc 0 · 单测 **1067/1067 / 94 文件**（+2 例改 1 例）· build 0 · 契约 60/60 · 真机复验全 PASS（保存 → revert → turn/start(edit_user_message) → 编辑消息 + 回复 ~6s 物化、`desktopError` 空）。
+
+**未闭环**（详见 [round-177 §六](../rounds/round-177-edit-resend-swallowed-by-orphan-worked-rows.md)）：sidecar 删除不回传（PUT-only 增量镜像，陈旧条目靠判据兜底，200 条/线程截断）；round-176 模型列表三项未复测（用户只报了编辑路径）；探针 cwd 为 UI 默认值，真实 cwd 差异未覆盖。
 ## round-176（模型列表保线程选择 + 编辑保存失败可见化 + 回退入口改编辑按钮，未发布）
 
 **性质**：用户报障修复轮（2 条：模型列表延迟/线程模型被切默认/有时只剩默认；回退按钮改编辑按钮 + 编辑功能无法正常使用）。真机取证基于合成线程 + 页面内 RPC 拦截（`tmp/r176-harness.js` 必须包 `{ result }` 信封；vite dev 5175 + 隔离 home + Edge headless）。
