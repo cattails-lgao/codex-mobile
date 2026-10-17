@@ -6,7 +6,7 @@
 
 | 项 | 值 |
 |---|---|
-| Git 分支 | `main`（**领先 1 笔待推**——round-176 docs 笔随本轮落地，推送待本轮收尾；代码笔 `de8430d6` 同批；v0.1.134 回填笔已于 2026-10-16 深夜经代理 `127.0.0.1:7890` 推送成功，`4d8625f2..798c5656`）· 当前进度 **round-176** |
+| Git 分支 | `main`（**已同步 `origin/main`，落后 0**——round-176 两笔（代码 `de8430d6` + docs）已于 2026-10-17 晚**直连**推送成功，`16e1b674..4a25bb47`；推送时本机无代理进程在跑，按「没有就直连」口径单次直推成功）· 当前进度 **round-176** |
 | Dev 端口 | 4173 |
 | Dev 状态 | **未运行**（2026-10-17 21:xx 复测：本轮 vite dev server（5175，round-176 探针用）与 headless Edge 已全部结束；4173/4191/5175 无监听）。**round-176（模型列表保线程选择 + 编辑保存失败可见化 + 回退入口改编辑按钮）产品侧全绿**（`vue-tsc --noEmit` 退 0 · `vitest run` **1066/1066 / 94 文件** · `vite build` 退 0 · ui-contract **60/60**）＋真机探针 13 断言全 PASS（编辑链路 revert+turn/start 端到端、模型下拉线程模型不被覆写、慢 provider 冷启动、revert 失败会话内可见反馈 + 不重发；探针 `tmp/r176-probe.cjs`） |
 | App-server | **dev server 未运行**（`4173` 无监听），**真机只读取证两次**：round-158 测 3 个新增客户端方法（**2 可用 + `thread/prediction/request` 未实现**，证据 `tmp/r158-rpc-probe.json`）；**round-159 做了全量普查** —— 对 **170** 个客户端方法逐方法发**从 schema 构造的合法参数**，得 **`OK 62 / IMPLEMENTED 86 / UNDETERMINED 13 / SKIPPED 5 / NOT_IMPLEMENTED 4`**，「已发布但未实现」由 1 个更正为 **4 个**（见该轮文档），证据 `tmp/probe-app-server-methods.json`，可复跑 `node scripts/probe-app-server-methods.cjs`。**round-161 未跑真机**（只改闸门脚本与文档）。版本口径见「工具链」；**测 codex 版本前先确认 `CODEXUI_CODEX_COMMAND` 指向哪一套**。**round-162 未跑真机**（只改 `--selftest` 夹具字面量并跑产品侧验证） |
