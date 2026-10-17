@@ -458,6 +458,19 @@
 - **发布闭环（2026-10-16 回填）**：`codex-mobile-re@0.1.134` 已由维护者 `pnpm publish` 至 npm 官方源并成为 `latest`（**发布时刻 `2026-10-16T14:23:49.383Z`** ＝北京 22:23:49；shasum `28c04d3feb2a2699f5e63e912499506f4d7f03e2` 与下载 tarball 复算 sha1 逐位一致；integrity `sha512-oqflN…QGsZvckAIQaxzh69IZzX4kGP0S0gwIR57WO5vqxQUftv5Dql4dLpDqkMw==`；tarball 1,666,965 B / unpacked 5,204,920 B / 54 文件）。publish 后 registry 传播实测：**版本端点约 4 分钟内持续 404 后转 200**（较 round-171 的 ~1 分钟更长），核验时勿以单次查询定论。
 - **生效条件**：前端生效需站点重部署（`vite build` + `tsup`）。
 
+## round-176（模型列表保线程选择 + 编辑保存失败可见化 + 回退入口改编辑按钮，未发布）
+
+**性质**：用户报障修复轮（2 条：模型列表延迟/线程模型被切默认/有时只剩默认；回退按钮改编辑按钮 + 编辑功能无法正常使用）。真机取证基于合成线程 + 页面内 RPC 拦截（`tmp/r176-harness.js` 必须包 `{ result }` 信封；vite dev 5175 + 隔离 home + Edge headless）。
+
+**根因**：① `refreshModelPreferences` 在线程模型不在本次拉到的列表时直接 `setSelectedModelId(config 默认 / 第一个)`——provider-models 一次抖动即把线程模型**持久**改写（30s TTL + 失败也缓存 30s 加大了窗口）。② `rollbackSelectedThread` 失败只写 `error`，而 **`error` 在 UI 上没有渲染位**（`visibleFeedbackErrors` 只把它当设置页反馈按钮触发器）⇒ 点编辑保存/回退毫无反馈。编辑主链路本身端到端是通的（探针 A1–A6）。
+
+**改动**：线程自身键选择保留 + ensure 可见（`providerChanged` 仍覆写、新线程兜底键维持旧判据）；`readProviderCompatibleSelectedModel` 保留显示值；provider 缓存 5min TTL + SWR + 3s 负缓存；`selectThread` 非阻塞；回退失败补 `setTurnErrorForThread` + 编辑静默中止改显式反馈 + i18n 键；MessageToolbar Pencil/Edit。
+
+**提交**：代码笔 `de8430d6`（fix(chat)，9 文件 +279/−19）+ **本段所在提交**（docs；主入口 3 处 + 页脚 + 本文件 1326 → 1340 行 + round 文档新增）。
+
+**验证**：tsc 0 · 单测 **1066/1066 / 94 文件**（+6 例 +1 文件）· build 0 · 契约 60/60 · 真机探针 13 断言 PASS（A 编辑链路 / B 下拉与映射 / C 慢 provider / D 失败反馈）。
+
+**未闭环**（详见 [round-176 §六](../rounds/round-176-model-list-clobber-and-edit-feedback.md)）：用户真实线程未复现原始故障（修复依据是代码路径 + 可复现机制）；SWR 后台重验失败静默（有意）；连切线程的模型刷新竞态未构造探针；`turnTrigger` 真实 0.162.1 服务端行为未验（schema 自由 string）。
 ## round-175（parity 滞后复核第二轮：分叉 / 能力门控 / 揭示动画，未发布）
 
 **性质**：纯文档取证轮（`src/` 零改动，口径同 round-167）。承接 round-174 复核口径，把剩余疑似滞后的三行全部核掉。
