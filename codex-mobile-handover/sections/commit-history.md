@@ -458,6 +458,14 @@
 - **发布闭环（2026-10-16 回填）**：`codex-mobile-re@0.1.134` 已由维护者 `pnpm publish` 至 npm 官方源并成为 `latest`（**发布时刻 `2026-10-16T14:23:49.383Z`** ＝北京 22:23:49；shasum `28c04d3feb2a2699f5e63e912499506f4d7f03e2` 与下载 tarball 复算 sha1 逐位一致；integrity `sha512-oqflN…QGsZvckAIQaxzh69IZzX4kGP0S0gwIR57WO5vqxQUftv5Dql4dLpDqkMw==`；tarball 1,666,965 B / unpacked 5,204,920 B / 54 文件）。publish 后 registry 传播实测：**版本端点约 4 分钟内持续 404 后转 200**（较 round-171 的 ~1 分钟更长），核验时勿以单次查询定论。
 - **生效条件**：前端生效需站点重部署（`vite build` + `tsup`）。
 
+## v0.1.135 发布（round-176 ~ round-179，发布动作完成 / npm 待维护者 publish）
+
+- **范围**：`v0.1.134` 标签 → 头 = **14 提交**（round-176 三笔 + round-177 三笔 + round-178 三笔 + round-179 两笔 + 文档修正 `9f825899` + 本 bump），**26 文件 +1516/−39**。**`src/server/**` 零改动** ⇒ `SHARED_BRIDGE_VERSION` 不动（保持 v7）。
+- **内容四组**：① **编辑消息修复**（round-176/177）——模型列表切换不再打断线程选择、编辑保存失败可见化、回退入口改编辑按钮（`de8430d6`）；「孤儿耗时行」误判回退失败导致重发被吞（`2b08696e`）。② **消息快照先上屏 + 渐进归一化**（round-178）——`codex-web-local.thread-message-snapshot.v1`（384KB/线程、LRU 6、版本不符整表丢弃）+ `normalizeThreadMessagesV2Progressive`（首片 30 轮＝hot 窗口，余量分帧，结果与全量逐位一致）⇒ 重开 2.2–2.6s → **0.42–1.06s**，且 RPC 返回前 1.2–1.7s 已上屏。③ **快照保存移出首屏路径**（round-179）——`scheduleThreadMessageSnapshotSave`（`rAF→setTimeout` + 写入前复核「尾部仍在本地」）、裁剪改从尾部累加，冷开首行中位 **−65ms** 且方差 160ms→45ms。④ **冷开诊断收口**（round-179 + `9f825899`）——归一化只 15–25ms（推翻「~550ms」的旧判断），首屏成本以首次挂载固定开销为主；三个「架构方案」经历史核对两项已被覆盖（round-84 桥层瘦身、round-148 虚拟列表），**冷开不再立项**。
+- **发布动作**：发版前完整构建验证（`vue-tsc --noEmit` 退 0 · vitest **1083/1083（98 文件）** · `vite build` 357 modules 退 0 · tsup 退 0）。bump `ebcfec00`（`chore(release): 0.1.135`）→ annotated tag `v0.1.135`（tag 对象 `ee3eb194`，指向 `ebcfec00`）→ `gh release create v0.1.135 --latest`（https://github.com/cattails-lgao/codex-mobile/releases/tag/v0.1.135 ，publishedAt **`2026-10-19T08:46:24Z`** ＝北京 16:46:24，`gh release list` 显示 **Latest**）。本轮 gh 默认 repo 已落在 fork（无需 `--repo`）。main + tag 均**直连**推送成功（`9f825899..ebcfec00`、`* [new tag]`）；`127.0.0.1:7890` 同样可用，`10808` 已死。
+- **闸门**：round-179 提交前已全绿（uic 60 / hot 6 / bl 4 / fonts 13 / an 56 / media 44 / theme 15 / 脱敏 0 / md-links 0），此后代码零改动、仅文档与版本号 ⇒ 未复跑浏览器闸门。
+- **待闭环**：`pnpm publish` 由维护者执行（读 `%LOCALAPPDATA%\pnpm\config\auth.ini`，不是 `~/.npmrc`）；随后回填 npm 发布时刻 / shasum / tarball 体积。**前端生效仍需站点重部署。**
+
 ## round-179（冷开首屏再压一档 ⇒ 定位到架构下限；落地「快照保存移出首屏路径」，未发布）
 
 **性质**：承接 round-178 的诚实边界「冷开仍有 ~1s 尾延迟」，用户要求再压一档。本轮以 CPU 采样 + 逐帧行数采样把冷开拆到底，**结论是压不下去**，只落地两项有 profile 证据的小优化。
@@ -470,7 +478,7 @@
 
 **验证**：`vue-tsc` 退 0 · 单测 **1083/1083（98 文件）**（round-178 基线 1081 + 2，且**反跑**：改回同步保存则两条都失败）· 双构建退 0 · 闸门 uic 60/60、hot 6/6、bl 4/4、fonts 13/13、an 56/56、media 44/44、theme 15/15 · A/B 对照（各 3 次逐帧首行）同步 1278/1399/1599（中位 1399）→ 延后 1307/1334/1394（中位 1334），**中位省 65ms 且分布更稳**。
 
-**诚实边界**：65ms 不是「一档」；冷开 ~1.3s 的下限由 RPC + 4MB JSON + 首次挂载共同决定，本轮一项未削。要继续只能动架构：动态 hot 起点（估 200–300ms，中风险）/ 变量高度虚拟列表（估 500ms+，与「sh 守恒」闸门互斥）/ 桥层 payload 瘦身（属 `src/server`，需 bump 桥版本）。
+**诚实边界**：65ms 不是「一档」；冷开 ~1.3s 是 **170 轮压力夹具**的上限（真实最重线程只有 10 轮 / 543 items / 1.38MB，resume 经桥只带 `THREAD_RESPONSE_TURN_LIMIT = 10` 轮），本轮一项未削。**后续核对修正（同一个提交 `9f825899`）**：初稿列的三个「架构方案」两项已被历史覆盖 —— 桥层瘦身是 round-84 已做（`threadResumeTurnPage.ts`，12.12MB→4.29MB，页 10 轮，无余量）；虚拟列表是 round-148 已落地零调用点（接线等于推翻 r163/r165 分层窗口化）；动态 hot 只是 `HOT_TURNS` 入参调整，且其近亲 `tailOnly` 已回退。**冷开不再立项**。
 
 ## round-178（消息加载慢：快照先上屏 + 渐进归一化，未发布）
 
