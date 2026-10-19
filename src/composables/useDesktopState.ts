@@ -204,6 +204,7 @@ import {
   type ReasoningTimelineDeps,
 } from './useDesktopStateReasoningTimeline'
 import {
+  clearThreadMessageSnapshot,
   loadLastPlanMap,
   loadPersistedReasoningMap,
   loadPersistedTurnDurationMap,
@@ -3480,6 +3481,9 @@ export function useDesktopState() {
           `[rollback] ${threadId}: turn ${beforeTurnId} is already gone on the server; reconciling locally instead of sending thread/revert`,
         )
         dropPersistedTurnLocally(threadId, beforeTurnId)
+        // round-178：快照是另一份独立副本，回退后必须一并丢弃（否则重开时
+        // 旧快照会把刚被移除的轮次再画出来）。
+        clearThreadMessageSnapshot(threadId)
         // round-177：本地对齐同样清掉耗时存档（孤儿 worked 行同源）。
         forgetTurnDurations(threadId, [beforeTurnId])
         pendingThreadsRefresh = true
@@ -3509,6 +3513,9 @@ export function useDesktopState() {
         .map((message) => message.turnId?.trim() ?? '')
         .filter((id) => id.length > 0)
       setPersistedMessagesForThread(threadId, nextMessages)
+      // round-178：回退成功后丢弃消息快照——快照是「先上屏」的独立副本，
+      // 不跟着 persistedMessages 一起变；留着会让重开瞬间画回已删轮次。
+      clearThreadMessageSnapshot(threadId)
       setLiveAgentMessagesForThread(threadId, [])
       clearLiveReasoningForThread(threadId)
       dropPersistedReasoningForRemovedTurns(threadId, [...removedTurnIds, beforeTurnId], turnIndex)

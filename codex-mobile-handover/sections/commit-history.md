@@ -458,6 +458,18 @@
 - **发布闭环（2026-10-16 回填）**：`codex-mobile-re@0.1.134` 已由维护者 `pnpm publish` 至 npm 官方源并成为 `latest`（**发布时刻 `2026-10-16T14:23:49.383Z`** ＝北京 22:23:49；shasum `28c04d3feb2a2699f5e63e912499506f4d7f03e2` 与下载 tarball 复算 sha1 逐位一致；integrity `sha512-oqflN…QGsZvckAIQaxzh69IZzX4kGP0S0gwIR57WO5vqxQUftv5Dql4dLpDqkMw==`；tarball 1,666,965 B / unpacked 5,204,920 B / 54 文件）。publish 后 registry 传播实测：**版本端点约 4 分钟内持续 404 后转 200**（较 round-171 的 ~1 分钟更长），核验时勿以单次查询定论。
 - **生效条件**：前端生效需站点重部署（`vite build` + `tsup`）。
 
+## round-178（消息加载慢：快照先上屏 + 渐进归一化，未发布）
+
+**性质**：用户报障「我们的产品消息加载很慢，codex 桌面版 chatgpt 加载消息列表就很快」——先诊断后修，两档方案一起做。
+
+**诊断**（`tmp/r178-load-timing.cjs`，170 轮真实形态夹具）：冷开 ≈1.8s ＝ RPC ≈0.6s ＋ 客户端 ≈1.2s（4MB `JSON.parse` + ~9400 item 同步归一化 + 首屏全量渲染 1035 行）；给 RPC 人为加 800ms **1:1 叠加**且等待期零上屏；会话内切回无新 RPC 但纯重渲染 1.6s；刷新重开全冷。**根因：消息正文零本地持久化**（localStorage 只有 reasoning/耗时/已读/滚动状态等元数据）⇒ 首帧完全依赖 RPC 往返；桌面端是「本地缓存先上屏 + 后台静默刷新」。对照实验（手工播种 round-173 高度种子）证明渲染不是大头：首屏行数 1028→58 但到首行时间不变。
+
+**改动（5 文件 + 3 新测试文件）**：① `useDesktopStatePersistence.ts` 新增消息快照 `codex-web-local.thread-message-snapshot.v1`（单线程 384KB 预算、超预算从最旧端裁、全表 `savedAt` LRU 6、损坏/版本不符读回 null）+ `clearThreadMessageSnapshot`；② `useDesktopMessageHistoryLoading.ts` 打开线程时**先画快照**（仅本地无历史、线程不在进行中；RPC 仍后台跑，返回后 merge 服务端为准）→ 传渐进回调 → 成功后更新快照（空响应不可信/进行中跳过）；③ `v2.ts` 拆 `normalizeThreadTurnsRaw` + `finalizeNormalizedThreadMessages`，新增 `normalizeThreadMessagesV2Progressive`（贴底跟随 ⇒ **从最新往旧**分片，首片 30 轮＝hot 窗口立即上屏，余量 `setTimeout(0)` 分帧，末尾全局修正一次，结果与全量入口逐位一致）；④ `gateway/threads.ts` `resumeThread` 增可选 `onPartialMessages`（既有调用点零改动）；⑤ `useDesktopState.ts` 回退成功/本地对齐两处 `clearThreadMessageSnapshot`（防「回退掉了、刷新又回来」）。
+
+**验证**：`vue-tsc` 退 0 · `pnpm run test:unit` **1081/1081（97 文件）**（round-177 基线 1067 + 新 14：v2.progressive 4 / 快照存储 7 / 先上屏集成 3）· 双构建退 0 · 真机探针 `tmp/r178-snapshot-probe.cjs` 两轮 PASS（A 冷开 1.0–1.6s；**B 重开有快照 + RPC 拖慢 800ms ＝ 0.42–1.06s，且在 RPC 返回前 1.2–1.7s 已上屏**；C 0.45–0.94s；**D 反向对照清掉快照 ⇒ 2.2–2.6s 必须等 RPC**，证明 B 来自快照）· 闸门 uic 60/60、hot 6/6、bl 4/4、fonts 13/13、an 56/56、media 44/44、theme 15/15（对 `vite preview` 产物）。不触 `src/server/**` ⇒ `SHARED_BRIDGE_VERSION` 不动。
+
+**诚实边界**：重开收益 3–5×；**冷开只是小幅改善**（尾部仍是 r165「首屏全量渲染一轮再窗口化」，无高度种子时 ~1s）· 快照是纯前端优化，localStorage 失败静默退回旧路径 · 发送后快照要等下次加载才更新（stale-while-revalidate），回退已显式清 · 夹具轮数为复制（原始 31MB 线程已不在本机）。
+
 ## round-177（编辑保存被「孤儿耗时行」误判回退失败 ⇒ 重发被吞，未发布）
 
 **性质**：round-176 编辑路径的续修轮（用户复测「编辑我点击发送的时候，像没有发出去一样」）。真机取证升级为三层：协议层（`tmp/r177-edit-real.cjs`，真 app-server 0.162.1 + 隔离 home + 真实 relay provider，零拦截——协议全链路通，顺带闭环 round-176 遗留的「turnTrigger 服务端行为未验」）⇒ UI 层复现（`tmp/r177-ui-probe.cjs`，vite dev + `CODEX_HOME` 隔离 home 挂真 app-server：保存后无 turn/start、列表 rows=0）⇒ 状态层定位（读 `setupState`：`desktopError="Edit failed…"`，`filteredMessages` 只剩两条带已删轮次 turnId 的孤儿 "Worked for Xs" 行）。

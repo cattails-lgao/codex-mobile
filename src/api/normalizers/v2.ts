@@ -832,6 +832,12 @@ function isInjectedUserMessage(message: UiMessage, indexAmongUserMessages: numbe
 }
 
 export function normalizeThreadMessagesV2(payload: ThreadReadResponse, baseTurnIndex = 0): UiMessage[] {
+  return finalizeNormalizedThreadMessages(normalizeThreadTurnsRaw(payload, baseTurnIndex))
+}
+
+// round-178：把逐轮循环与两条跨轮修正（压缩折叠 / compaction 归位）拆开，供渐进
+// 归一化复用同一套逐轮逻辑（分片调用时 turnIndex 用 baseTurnIndex + 分片偏移对齐）。
+function normalizeThreadTurnsRaw(payload: ThreadReadResponse, baseTurnIndex = 0): UiMessage[] {
   const turns = Array.isArray(payload.thread.turns) ? payload.thread.turns : []
   const messages: UiMessage[] = []
   for (let turnOffset = 0; turnOffset < turns.length; turnOffset++) {
@@ -877,13 +883,61 @@ export function normalizeThreadMessagesV2(payload: ThreadReadResponse, baseTurnI
     // them here stacks all work items together, which reads as disconnected.
     messages.push(...turnMessages)
   }
-  // A thread accumulates one ContextCompaction item per compaction run. Keep
-  // only the most recent one in the feed so repeated compactions do not stack
-  // up rows of "Context compacted"; older summaries are superseded.
-  // round-30：服务端把 contextCompaction 固定在 turn items 末尾，刷新后压缩块
-  // 会跑到对话最后（与压缩实际发生时点不符）。归一化后把它移到该轮第一条
-  // 用户消息之后——压缩是 turn 边界动作，语义上属于轮首，刷新前后位置一致。
+  return messages
+}
+
+/**
+ * 两条跨轮修正：① 压缩折叠——线程每跑一次压缩就累积一个 ContextCompaction item,
+ * 只保留最近一条（旧摘要有更新者取代）,避免 "Context compacted" 成堆;② 归位——
+ * round-30：服务端把 contextCompaction 固定在 turn items 末尾,刷新后压缩块会跑到
+ * 对话最后（与压缩实际发生时点不符）。归一化后把它移到该轮第一条用户消息之后——
+ * 压缩是 turn 边界动作,语义上属于轮首,刷新前后位置一致。
+ */
+export function finalizeNormalizedThreadMessages(messages: UiMessage[]): UiMessage[] {
   return repositionCompactionAfterUserMessage(collapseCompactionDoneMessages(messages))
+}
+
+/**
+ * round-178：渐进归一化——列表是贴底跟随的（首屏看到的是**最新**轮次），所以
+ * 分片顺序取「从最新往旧」：先归一化最新 THREAD_NORMALIZE_CHUNK_TURNS 轮立刻经
+ * `onPartialMessages` 上屏（等价于热窗口需要的全部内容），余量按片补齐（每片
+ * 让出主线程一次），结束时对累积结果跑一次全局修正。最终返回值与
+ * `normalizeThreadMessagesV2` 全量运行逐位一致（分片间 turnIndex 用
+ * `baseTurnIndex + from` 对齐；跨轮修正只在末尾对完整列表跑一次，与全量路径同序）。
+ * 无 onPartialMessages 或轮数不超过一片时走原同步路径（行为不变）。
+ */
+export const THREAD_NORMALIZE_CHUNK_TURNS = 30
+
+function yieldToMainThread(): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, 0)
+  })
+}
+
+export async function normalizeThreadMessagesV2Progressive(
+  payload: ThreadReadResponse,
+  baseTurnIndex = 0,
+  onPartialMessages?: (messages: UiMessage[]) => void,
+): Promise<UiMessage[]> {
+  const turns = Array.isArray(payload.thread.turns) ? payload.thread.turns : []
+  if (!onPartialMessages || turns.length <= THREAD_NORMALIZE_CHUNK_TURNS) {
+    return normalizeThreadMessagesV2(payload, baseTurnIndex)
+  }
+  let acc: UiMessage[] = []
+  let first = true
+  for (let to = turns.length; to > 0; to -= THREAD_NORMALIZE_CHUNK_TURNS) {
+    const from = Math.max(0, to - THREAD_NORMALIZE_CHUNK_TURNS)
+    const slicePayload: ThreadReadResponse = {
+      ...payload,
+      thread: { ...payload.thread, turns: turns.slice(from, to) },
+    }
+    const chunk = normalizeThreadTurnsRaw(slicePayload, baseTurnIndex + from)
+    acc = first ? chunk : [...chunk, ...acc]
+    first = false
+    onPartialMessages(acc)
+    if (from > 0) await yieldToMainThread()
+  }
+  return finalizeNormalizedThreadMessages(acc)
 }
 
 function collapseCompactionDoneMessages(messages: UiMessage[]): UiMessage[] {

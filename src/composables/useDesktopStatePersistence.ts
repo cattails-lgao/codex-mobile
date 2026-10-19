@@ -562,3 +562,142 @@ export function saveProjectDisplayNames(displayNames: Record<string, string>): v
   if (typeof window === 'undefined') return
   window.localStorage.setItem(PROJECT_DISPLAY_NAME_STORAGE_KEY, JSON.stringify(displayNames))
 }
+
+// ===== round-178：线程消息快照（「先上屏」缓存） =====
+//
+// 消息正文此前没有任何本地持久化（localStorage 只存 reasoning/耗时/已读等元数据），
+// 每次打开线程都要等 thread/resume RPC + 全量归一化 + 渲染全部完成才画第一帧
+// （170 轮真实形态实测 ≈1.8s，其中 RPC 期 + 归一化期零上屏）。本快照让重开线程时
+// 先把上一次加载的内容立即画出来，RPC 静默刷新覆盖——ChatGPT 桌面端同款体感。
+//
+// 预算：每线程条目裁到 MAX_THREAD_MESSAGE_SNAPSHOT_BYTES（超出从最旧消息开始丢，
+// 保最新——首屏贴底看到的就是最新），全表按 savedAt LRU 保留
+// MAX_THREAD_MESSAGE_SNAPSHOT_ENTRIES 个线程。条目损坏 / 版本不符 → 整表丢弃。
+
+export const THREAD_MESSAGE_SNAPSHOT_STORAGE_KEY = 'codex-web-local.thread-message-snapshot.v1'
+export const MAX_THREAD_MESSAGE_SNAPSHOT_ENTRIES = 6
+export const MAX_THREAD_MESSAGE_SNAPSHOT_BYTES = 384 * 1024
+
+export type ThreadMessageSnapshotEntry = {
+  /** 格式版本（结构不兼容时整体丢弃，不尝试迁移）。 */
+  v: 1
+  savedAt: number
+  /** 保存时服务端是否还有更早轮次（仅信息性；以真实加载结果为准）。 */
+  hasMoreOlder: boolean
+  messages: UiMessage[]
+  /** turnId → turnIndex，供轮次耗时/摘要在快照上屏期间可查。 */
+  turnIndexByTurnId: Record<string, number>
+}
+
+export type ThreadMessageSnapshotMap = Record<string, ThreadMessageSnapshotEntry>
+
+function loadThreadMessageSnapshotMap(): ThreadMessageSnapshotMap {
+  if (typeof window === 'undefined') return {}
+  try {
+    const raw = window.localStorage.getItem(THREAD_MESSAGE_SNAPSHOT_STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    const result: ThreadMessageSnapshotMap = {}
+    for (const [threadId, value] of Object.entries(parsed as Record<string, unknown>)) {
+      const entry = value as Partial<ThreadMessageSnapshotEntry> | null
+      if (
+        !threadId
+        || !entry
+        || typeof entry !== 'object'
+        || entry.v !== 1
+        || !Array.isArray(entry.messages)
+        || entry.messages.length === 0
+        || typeof entry.savedAt !== 'number'
+        || !Number.isFinite(entry.savedAt)
+      ) continue
+      result[threadId] = {
+        v: 1,
+        savedAt: entry.savedAt,
+        hasMoreOlder: entry.hasMoreOlder === true,
+        messages: entry.messages as UiMessage[],
+        turnIndexByTurnId: entry.turnIndexByTurnId && typeof entry.turnIndexByTurnId === 'object'
+          ? (entry.turnIndexByTurnId as Record<string, number>)
+          : {},
+      }
+    }
+    return result
+  } catch {
+    return {}
+  }
+}
+
+export function readThreadMessageSnapshot(threadId: string): ThreadMessageSnapshotEntry | null {
+  if (!threadId) return null
+  return loadThreadMessageSnapshotMap()[threadId] ?? null
+}
+
+/**
+ * 丢弃单线程快照。回退/中断等「服务端已删轮次」的本地操作后必须调用：
+ * 否则刷新重开会先用含已删轮次的旧快照垫底，出现「回退掉了、刷新又回来」
+ * （round-143 同类现象，只是窗口从「一直」缩成「上屏后 1 秒内」）。
+ */
+export function clearThreadMessageSnapshot(threadId: string): void {
+  if (!threadId || typeof window === 'undefined') return
+  try {
+    const map = loadThreadMessageSnapshotMap()
+    if (!(threadId in map)) return
+    delete map[threadId]
+    window.localStorage.setItem(THREAD_MESSAGE_SNAPSHOT_STORAGE_KEY, JSON.stringify(map))
+  } catch {
+    // Ignore localStorage failures.
+  }
+}
+
+/**
+ * 保存线程消息快照。超预算条目从最旧消息开始裁（保最新 = 首屏所需）；全表 LRU。
+ * 任何 localStorage 异常（配额/隐私模式）静默忽略——快照是纯优化，失败即退回旧加载路径。
+ */
+export function saveThreadMessageSnapshot(
+  threadId: string,
+  messages: UiMessage[],
+  turnIndexByTurnId: Record<string, number>,
+  hasMoreOlder: boolean,
+): void {
+  if (!threadId || messages.length === 0 || typeof window === 'undefined') return
+  try {
+    const map = loadThreadMessageSnapshotMap()
+    const entryMessages = trimSnapshotMessagesToBudget(messages)
+    if (entryMessages.length === 0) return
+    map[threadId] = {
+      v: 1,
+      savedAt: Date.now(),
+      hasMoreOlder,
+      messages: entryMessages,
+      turnIndexByTurnId,
+    }
+    const entries = Object.entries(map)
+      .sort((a, b) => b[1].savedAt - a[1].savedAt)
+      .slice(0, MAX_THREAD_MESSAGE_SNAPSHOT_ENTRIES)
+    const trimmed: ThreadMessageSnapshotMap = {}
+    for (const [id, entry] of entries) trimmed[id] = entry
+    window.localStorage.setItem(THREAD_MESSAGE_SNAPSHOT_STORAGE_KEY, JSON.stringify(trimmed))
+  } catch {
+    // Ignore localStorage failures (quota/private mode).
+  }
+}
+
+/** 从最旧端丢消息直到序列化体积进预算；单条超预算时保底保留该条（后续轮仍在）。 */
+function trimSnapshotMessagesToBudget(messages: UiMessage[]): UiMessage[] {
+  const parts = messages.map((message) => {
+    try {
+      return JSON.stringify(message) ?? ''
+    } catch {
+      return ''
+    }
+  })
+  let total = parts.reduce((sum, part) => sum + part.length + 1, 0)
+  if (total <= MAX_THREAD_MESSAGE_SNAPSHOT_BYTES) return messages
+  let start = 0
+  while (start < parts.length - 1 && total > MAX_THREAD_MESSAGE_SNAPSHOT_BYTES) {
+    total -= parts[start].length + 1
+    start += 1
+  }
+  const kept = messages.slice(start).filter((_, index) => parts[start + index] !== '')
+  return kept.length > 0 ? kept : messages.slice(-1)
+}

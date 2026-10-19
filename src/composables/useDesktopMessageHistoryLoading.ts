@@ -19,6 +19,7 @@ import {
   removeRedundantLiveAgentMessages,
   type TurnErrorState,
 } from './useDesktopStateUtils'
+import { readThreadMessageSnapshot, saveThreadMessageSnapshot } from './useDesktopStatePersistence'
 
 const RECENT_THREAD_MESSAGE_LOAD_REUSE_MS = 2000
 
@@ -146,8 +147,39 @@ export function createDesktopMessageHistoryLoading(deps: MessageHistoryLoadingDe
         return
       }
 
+      // round-178：「先上屏」快照——RPC 返回前先把上一次加载的内容立即画出来
+      // （纯优化：仅当本地尚无历史、线程不在进行中、有快照时）。RPC 返回后既有
+      // merge 按消息 id 去重覆盖，服务端真相为准；线程进行中不快照（流式尾部
+      // 不该用旧内容垫底）。快照保存失败（配额/隐私模式）静默退回旧加载路径。
+      if (!alreadyLoaded && deps.inProgressById.value[threadId] !== true) {
+        const existingPersisted = deps.persistedMessagesByThreadId.value[threadId] ?? []
+        if (existingPersisted.length === 0) {
+          const snapshot = readThreadMessageSnapshot(threadId)
+          if (snapshot) {
+            deps.setPersistedMessagesForThread(threadId, snapshot.messages)
+            if (Object.keys(snapshot.turnIndexByTurnId).length > 0) {
+              deps.replaceTurnIndexLookupForThread(threadId, snapshot.turnIndexByTurnId)
+            }
+            // 快照上屏期间也要有「加载更早」入口，否则 RPC 回来前用户看不到任何
+            // 上翻能力（hasMoreOlder 由真实加载结果覆盖，快照值只作过渡）。
+            if (snapshot.hasMoreOlder) {
+              hasMoreOlderMessagesByThreadId.value = {
+                ...hasMoreOlderMessagesByThreadId.value,
+                [threadId]: true,
+              }
+            }
+          }
+        }
+      }
+
       const needsResume = deps.resumedThreadById.value[threadId] !== true
-      const resumedThread = needsResume ? await resumeThread(threadId) : null
+      const resumedThread = needsResume
+        ? await resumeThread(threadId, (partial) => {
+          // round-178：渐进归一化——最新 30 轮先上屏，余量分帧补齐（每片让出
+          // 主线程一次）；load 尾部既有 merge 再做最终收敛。
+          deps.setPersistedMessagesForThread(threadId, partial)
+        })
+        : null
       const detail = resumedThread ?? await getThreadDetail(threadId)
 
       if (detail.modelProvider) {
@@ -221,6 +253,11 @@ export function createDesktopMessageHistoryLoading(deps: MessageHistoryLoadingDe
       }
       lastMessageLoadAtByThreadId.set(threadId, Date.now())
       lastMessageLoadFailureAtByThreadId.delete(threadId)
+      // round-178：加载成功即更新快照（供下次打开先上屏）。空响应不可信时不覆盖；
+      // 进行中的线程跳过（流式尾部变化快，省去无谓的序列化）。
+      if (!suspiciousEmptyResponse && !inProgress) {
+        saveThreadMessageSnapshot(threadId, mergedMessages, turnIndexByTurnId, detail.hasMoreOlder === true)
+      }
 
       if (version) {
         loadedVersionByThreadId.value = {

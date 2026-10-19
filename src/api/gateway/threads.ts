@@ -26,6 +26,7 @@ import {
 import {
   normalizeThreadGroupsV2,
   normalizeThreadMessagesV2,
+  normalizeThreadMessagesV2Progressive,
   normalizeThreadSummaryV2,
   readActiveTurnIdFromResponse,
   readExternalSessionFromResponse,
@@ -547,14 +548,19 @@ export async function getCommandOutputText(ref: string): Promise<string> {
   return typeof payload.text === 'string' ? payload.text : ''
 }
 
-export async function resumeThread(threadId: string): Promise<ResumedThread> {
+export async function resumeThread(
+  threadId: string,
+  onPartialMessages?: (messages: UiMessage[]) => void,
+): Promise<ResumedThread> {
   const existing = recentResumeThreadById.get(threadId)
   if (existing) return existing
 
   const promise = (async () => {
     const payload = await callRpc<ThreadResumeResponse>('thread/resume', { threadId })
     const startTurnIndex = readThreadTurnStartIndex(payload)
-    const messages = normalizeThreadMessagesV2(payload, startTurnIndex)
+    // round-178：传 onPartialMessages 时走渐进归一化（先最新一片上屏，余量分帧补齐）；
+    // 合并命中（recentResumeThreadById）时回调不重放——调用方 loadMessages 自带去重。
+    const messages = await normalizeThreadMessagesV2Progressive(payload, startTurnIndex, onPartialMessages)
     return {
       model: normalizeThreadModelFromPayload(payload),
       modelProvider: normalizeThreadModelProviderFromPayload(payload),
