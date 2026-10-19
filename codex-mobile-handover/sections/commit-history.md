@@ -468,7 +468,9 @@
 
 **验证**：`vue-tsc` 退 0 · 单测 **1089/1089（99 文件）**（round-180 基线 1083/98，+6 例全部来自新增 `wsHeartbeat.test.ts`）· `vite build` 退 0（`dist/sw.js` 注入 `codexweb-shell-d17f43ac5d`、占位符残留 false）· `tsup` 退 0 · 脱敏 0 / md-links 0 · **心跳真实服务实测**（生产入口 `dist-cli` :4199、cwd 在仓外、隔离空 `CODEX_HOME`）：+29.3s/+54.3s 两次 ping、`autoPong:false` 客户端 +54.3s 被 `terminate`（1006）、正常连接未被误杀。
 
-**诚实边界**：用户那次红条本身未复现（清缓存自愈只能指向客户端陈旧状态，不能证明就是 SW）；「心跳能骗过 nginx 120s」须等重部署后复测；12s 只改阈值、慢响应成功未做端到端复现；SW 注入的负向路径未自动化验证；`provider-models` 失败仍对用户不可见（`error` 通道无 UI 渲染位）。
+**诚实边界**：用户那次红条本身未复现（清缓存自愈只能指向客户端陈旧状态，不能证明就是 SW）；「心跳能骗过 nginx 120s」已用 30s 空闲阈值的等价代理证明机制成立（零流量 30.0s 被切 / 带心跳存活 100s），但**等价装置 ≠ 线上 nginx**，仍须重部署后复测；12s 只改阈值、慢响应成功未做端到端复现；`addAll` 失败会在 `caches.keys()` 留下**空缓存目录**（条目数 0，`activate` 只在成功接管时清理）；`provider-models` 失败仍对用户不可见（`error` 通道无 UI 渲染位）。
+
+**补记（同一 round 的验证补齐，不新开 round）**：三条先前登记为「未验证」的边界，改用**等价装置**在本机验证：① 造 30s 空闲读超时的 TCP 代理（`proxy_read_timeout` 语义）⇒ 零流量连接 30.0s 被切 `code=1006`、带心跳连接存活 100s（3 次 ping），机制成立且对线上 120s 有 4.8 倍余量；② 三个 origin 的 SW 对照（`legacy` / `legacy-bumped` / `stamped`）⇒ 「字节不变就不更新」与「`addAll` 一处失败即装不上（该缓存**条目数 0**）」均被复现，正式实现照常接管并清旧缓存；③ 删掉注入点后重建 ⇒ 退 **1** 并命中「BUILD_ID 未被注入」，恢复后重建退 **0**。另修注入实现：幂等分支由**全局替换 `codexweb-shell-*`** 改为**锚定 `const BUILD_ID = ...` 行**（原写法会把注释里的旧名改掉，产物注释自相矛盾），`assert` 同步收紧为校验该行取值。脚本：`tmp/r183b-idle-proxy.cjs` · `tmp/r183c-sw-redeploy.cjs` · `tmp/r183d-assert-negative.cjs`。**仍未验证**：线上 nginx 的真实行为（须等重部署）、12s 阈值下的慢响应成功端到端。
 
 详见 [round-183](../rounds/round-183-network-red-rows-sw-ws-heartbeat.md)。
 

@@ -129,7 +129,7 @@ async function stampServiceWorkerBuildId(outDir: string): Promise<void> {
   const raw = await readFile(swPath, "utf8");
   const next = raw.includes(SW_BUILD_PLACEHOLDER)
     ? raw.split(SW_BUILD_PLACEHOLDER).join(fingerprint)
-    : raw.replace(/codexweb-shell-[0-9a-z]+/g, `codexweb-shell-${fingerprint}`);
+    : raw.replace(/const BUILD_ID = '[^']*'/u, `const BUILD_ID = '${fingerprint}'`);
   if (next !== raw) await writeFile(swPath, next, "utf8");
 }
 
@@ -139,7 +139,8 @@ function assertServiceWorkerStamped(outDir: string): void {
     throw new Error(`codex-sw-version: ${swPath} 不存在，构建产物不完整`);
   }
   const stamped = readFileSync(swPath, "utf8");
-  if (stamped.includes(SW_BUILD_PLACEHOLDER) || !/codexweb-shell-[0-9a-z]{6,}/u.test(stamped)) {
+  const buildId = /const BUILD_ID = '([^']*)'/u.exec(stamped)?.[1] ?? "";
+  if (buildId.includes(SW_BUILD_PLACEHOLDER) || buildId.length < 6) {
     throw new Error(
       "codex-sw-version: sw.js 的 BUILD_ID 未被注入（占位符仍在）。"
         + " 这样上线后会退回「缓存永不失效」的老行为，构建按失败处理。",
