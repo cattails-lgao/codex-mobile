@@ -1,5 +1,7 @@
 # 当前运行状态
 
+> **本节是早期会话的现场记录，不是当前状态。** 当前 Dev / App-server 状态以总入口 [快照表](../codex-mobile-handover.md) 为准 —— 2026-10-19 19:05 读数：`4173` 无监听，dev server 与 app-server **均未运行**。下文「正在运行」「服务当前健康」等措辞按当时现场原样保留，仅作问题溯源用。
+
 开发服务器正在 `http://127.0.0.1:4173/` 运行，页面与静态资源返回 200，codex app-server 的 RPC 调用（`thread/list`、`skills/list`、`config/read`、`provider-models`）均正常响应。以下为本次启动的实际日志：
 
 ```text
