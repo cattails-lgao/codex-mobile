@@ -100,6 +100,33 @@ export function createDesktopMessageHistoryLoading(deps: MessageHistoryLoadingDe
   const lastMessageLoadFailureAtByThreadId = new Map<string, number>()
   let loadingIndicatorCount = 0
 
+  /**
+   * round-179：把快照保存推到首帧 paint 之后执行（rAF → setTimeout ⇒ 至少画完一帧）。
+   * 写入前做一次「尾部仍在本地」的复核：延迟窗口内若发生回退（回退会删尾部轮次并
+   * 清快照），这里就不再写回，避免「回退后刷新又回来」的旧 bug 以异步形式复活。
+   */
+  function scheduleThreadMessageSnapshotSave(
+    threadId: string,
+    messages: UiMessage[],
+    turnIndexByTurnId: Record<string, number>,
+    hasMoreOlder: boolean,
+  ): void {
+    const tailId = messages[messages.length - 1]?.id
+    if (!tailId) return
+    const run = () => {
+      const current = deps.persistedMessagesByThreadId.value[threadId] ?? []
+      if (!current.some((message) => message.id === tailId)) return
+      saveThreadMessageSnapshot(threadId, messages, turnIndexByTurnId, hasMoreOlder)
+    }
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(() => {
+        window.setTimeout(run, 0)
+      })
+      return
+    }
+    setTimeout(run, 0)
+  }
+
   async function loadMessages(threadId: string, options: { silent?: boolean; force?: boolean } = {}) {
     if (!threadId) {
       return
@@ -255,8 +282,10 @@ export function createDesktopMessageHistoryLoading(deps: MessageHistoryLoadingDe
       lastMessageLoadFailureAtByThreadId.delete(threadId)
       // round-178：加载成功即更新快照（供下次打开先上屏）。空响应不可信时不覆盖；
       // 进行中的线程跳过（流式尾部变化快，省去无谓的序列化）。
+      // round-179：保存推到首帧 paint 之后 —— 大线程整表序列化实测 ~150ms，同步跑会
+      // 把首屏整体推迟同样的量；快照只是「为下次打开」的优化，不该占首屏预算。
       if (!suspiciousEmptyResponse && !inProgress) {
-        saveThreadMessageSnapshot(threadId, mergedMessages, turnIndexByTurnId, detail.hasMoreOlder === true)
+        scheduleThreadMessageSnapshotSave(threadId, mergedMessages, turnIndexByTurnId, detail.hasMoreOlder === true)
       }
 
       if (version) {

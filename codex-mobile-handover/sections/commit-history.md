@@ -458,6 +458,20 @@
 - **发布闭环（2026-10-16 回填）**：`codex-mobile-re@0.1.134` 已由维护者 `pnpm publish` 至 npm 官方源并成为 `latest`（**发布时刻 `2026-10-16T14:23:49.383Z`** ＝北京 22:23:49；shasum `28c04d3feb2a2699f5e63e912499506f4d7f03e2` 与下载 tarball 复算 sha1 逐位一致；integrity `sha512-oqflN…QGsZvckAIQaxzh69IZzX4kGP0S0gwIR57WO5vqxQUftv5Dql4dLpDqkMw==`；tarball 1,666,965 B / unpacked 5,204,920 B / 54 文件）。publish 后 registry 传播实测：**版本端点约 4 分钟内持续 404 后转 200**（较 round-171 的 ~1 分钟更长），核验时勿以单次查询定论。
 - **生效条件**：前端生效需站点重部署（`vite build` + `tsup`）。
 
+## round-179（冷开首屏再压一档 ⇒ 定位到架构下限；落地「快照保存移出首屏路径」，未发布）
+
+**性质**：承接 round-178 的诚实边界「冷开仍有 ~1s 尾延迟」，用户要求再压一档。本轮以 CPU 采样 + 逐帧行数采样把冷开拆到底，**结论是压不下去**，只落地两项有 profile 证据的小优化。
+
+**诊断（170 轮真实形态夹具，headless Edge 1440×900）**：①冷开首行 1.3–2.7s，resume RPC 0.4–1.0s 是波动主导；②**归一化不是瓶颈** —— node 直测 `normalizeThreadMessagesV2` 全量 170 轮仅 15–25ms（round-178 记的「归一化 ~550ms」实为把 LoAF 的 render 时间错算进 JS）；③渐进首片 30 轮＝hot 区全部 ⇒ 首屏 **895 行**，其余 5 片只追加 140 张 warm 卡；④热点：Vue `track`/`get`/`prepareDeps`/`cleanupDeps` ≈ 580ms、`readScrollMetricsPx` 264ms（读 `scrollHeight` 强制布局）、`trimSnapshotMessagesToBudget` 146ms。详见 [round-179](../rounds/round-179-cold-open-first-paint-budget.md)。
+
+**改动（2 文件 + 1 新测试）**：①`useDesktopMessageHistoryLoading.ts` 新增 `scheduleThreadMessageSnapshotSave`——快照保存用 `rAF → setTimeout` 推到**首帧 paint 之后**，并在写入前复核「加载结果尾部消息 id 仍在本地」（防回退后异步写回旧快照）；②`useDesktopStatePersistence.ts` `trimSnapshotMessagesToBudget` 改为**从最新往前累加、够 384KB 即停**（旧实现对 9360 条逐条 `JSON.stringify` ≈ 146ms）；注释钉住「整表 stringify 一次」反而更慢（4MB 单串 271ms + 大对象 GC）。
+
+**已试并回退（负面结论）**：①**首屏限量**（首帧只渲染尾部 8 块 + 估算 spacer，`hotTurnWindow.tailOnly`）—— 逐帧实测开启 1346ms/195 行 vs 关闭 1393ms/1035 行，**净收益仅 47ms**，不值得多一次「出现→卡顿→补全」；根因是首屏成本以**首次挂载固定开销**为主，与行数弱相关；②**锁底不读度量**（`scrollTop = 1e9` 钳位写）—— `readScrollMetricsPx` 热点消失但 `scrollToBottom` 顶上同等量级（写 scrollTop 同样要强制布局），总量不变；③**渐进归一化跨帧 yield**（rAF→setTimeout）—— 首屏行数序列无变化（首片 895 行本就是主体）。
+
+**验证**：`vue-tsc` 退 0 · 单测 **1083/1083（98 文件）**（round-178 基线 1081 + 2，且**反跑**：改回同步保存则两条都失败）· 双构建退 0 · 闸门 uic 60/60、hot 6/6、bl 4/4、fonts 13/13、an 56/56、media 44/44、theme 15/15 · A/B 对照（各 3 次逐帧首行）同步 1278/1399/1599（中位 1399）→ 延后 1307/1334/1394（中位 1334），**中位省 65ms 且分布更稳**。
+
+**诚实边界**：65ms 不是「一档」；冷开 ~1.3s 的下限由 RPC + 4MB JSON + 首次挂载共同决定，本轮一项未削。要继续只能动架构：动态 hot 起点（估 200–300ms，中风险）/ 变量高度虚拟列表（估 500ms+，与「sh 守恒」闸门互斥）/ 桥层 payload 瘦身（属 `src/server`，需 bump 桥版本）。
+
 ## round-178（消息加载慢：快照先上屏 + 渐进归一化，未发布）
 
 **性质**：用户报障「我们的产品消息加载很慢，codex 桌面版 chatgpt 加载消息列表就很快」——先诊断后修，两档方案一起做。
