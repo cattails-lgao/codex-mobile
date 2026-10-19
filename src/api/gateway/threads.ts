@@ -66,10 +66,12 @@ const INITIAL_THREAD_LIST_LIMIT = 50
 const RESUME_THREAD_COALESCE_TTL_MS = 30_000
 const recentResumeThreadById = new Map<string, Promise<ResumedThread>>()
 
+// round-183：与 gateway/models.ts 同口径放宽到 12s（5s 在 app-server 忙时会
+// 被前端 abort，Network 面板留下 net::ERR_ABORTED 红条而界面无提示）。
 // ponytail: getCurrentModelConfig/getAvailableModelIds (and the model helpers they
 // pull in) are cross-domain shared and belong in a future gateway/models.ts. They are
 // duplicated here so threads.ts stays self-contained until that extraction lands.
-const PROVIDER_MODELS_FETCH_TIMEOUT_MS = 5_000
+const PROVIDER_MODELS_FETCH_TIMEOUT_MS = 12_000
 
 export type ThreadGroupsPage = {
   groups: UiProjectGroup[]

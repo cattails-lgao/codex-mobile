@@ -458,6 +458,20 @@
 - **发布闭环（2026-10-16 回填）**：`codex-mobile-re@0.1.134` 已由维护者 `pnpm publish` 至 npm 官方源并成为 `latest`（**发布时刻 `2026-10-16T14:23:49.383Z`** ＝北京 22:23:49；shasum `28c04d3feb2a2699f5e63e912499506f4d7f03e2` 与下载 tarball 复算 sha1 逐位一致；integrity `sha512-oqflN…QGsZvckAIQaxzh69IZzX4kGP0S0gwIR57WO5vqxQUftv5Dql4dLpDqkMw==`；tarball 1,666,965 B / unpacked 5,204,920 B / 54 文件）。publish 后 registry 传播实测：**版本端点约 4 分钟内持续 404 后转 200**（较 round-171 的 ~1 分钟更长），核验时勿以单次查询定论。
 - **生效条件**：前端生效需站点重部署（`vite build` + `tsup`）。
 
+## round-183（线上「间歇性网络错误」收口：SW 缓存版本化 + WS 心跳 + provider-models 超时，未发布）
+
+**性质**：用户报「打开线程后过一阵子 Network 面板出现网络错误」，指名两条端点，最终清空应用缓存后恢复。先定性再修：接口侧两轮独立驻留（headless 7min / 真机 Edge 155 + CDP 7min）合计 121 个 `/codex-api` 请求、**0 失败**，唯一 `loadingFailed` 是探针 `Page.reload` 打断在途请求 ⇒ **不是服务端问题**。
+
+**三条独立缺陷**：①`public/sw.js` 的 `CACHE_NAME` 写死 `codexweb-shell-v2` ⇒ 两次构建的 sw.js 字节相同 ⇒ 浏览器不判定更新、`activate` 不清旧缓存 ⇒ 重部署后旧标签页可持续跑旧构建；`install` 用 `cache.addAll`（任一失败整体 reject）⇒ 新 SW 装不上。②`/codex-api/ws` 无心跳 ⇒ nginx `proxy_read_timeout` 每 120s 判死（裸 ws +120.2s `code=1006`；真机 Edge +133.2s/+358.4s），重连后 `ready` → `recoverBridgeState()` 再打一次 `pending` ⇒ 该请求每 2 分钟出现一次是必然。③`provider-models` 前端 5s 硬超时 ⇒ 慢响应变 `net::ERR_ABORTED` 红条且界面无提示。
+
+**落地**：`public/sw.js`（`CACHE_NAME` 带构建指纹 + `install` 逐个 add + 导航仅在 `ok` 时写缓存）· `vite.config.ts` 新增插件 `codex-sw-version`（`writeBundle`+`closeBundle` 双兜注入 `dist/index.html` 指纹，未注入即抛错让构建失败）· 新增 `src/server/bridge/wsHeartbeat.ts`（25s ping、整周期无 pong 才 terminate、`unref`）+ 生产 `httpServer.ts` / dev `vite.config.ts` 双接 · `gateway/models.ts` 与 `gateway/threads.ts` 的 `PROVIDER_MODELS_FETCH_TIMEOUT_MS` 5s → 12s。
+
+**验证**：`vue-tsc` 退 0 · 单测 **1089/1089（99 文件）**（round-180 基线 1083/98，+6 例全部来自新增 `wsHeartbeat.test.ts`）· `vite build` 退 0（`dist/sw.js` 注入 `codexweb-shell-d17f43ac5d`、占位符残留 false）· `tsup` 退 0 · 脱敏 0 / md-links 0 · **心跳真实服务实测**（生产入口 `dist-cli` :4199、cwd 在仓外、隔离空 `CODEX_HOME`）：+29.3s/+54.3s 两次 ping、`autoPong:false` 客户端 +54.3s 被 `terminate`（1006）、正常连接未被误杀。
+
+**诚实边界**：用户那次红条本身未复现（清缓存自愈只能指向客户端陈旧状态，不能证明就是 SW）；「心跳能骗过 nginx 120s」须等重部署后复测；12s 只改阈值、慢响应成功未做端到端复现；SW 注入的负向路径未自动化验证；`provider-models` 失败仍对用户不可见（`error` 通道无 UI 渲染位）。
+
+详见 [round-183](../rounds/round-183-network-red-rows-sw-ws-heartbeat.md)。
+
 ## v0.1.136 发布（round-176 ~ round-179；0.1.135 版本槽被 npm 遗留暂存记录占用 ⇒ 换号发布，**已批准上架**）
 
 - **范围**：`v0.1.134` 标签 → 头 = **14 提交**（round-176 三笔 + round-177 三笔 + round-178 三笔 + round-179 两笔 + 文档修正 `9f825899` + 本 bump），**26 文件 +1516/−39**。**`src/server/**` 零改动** ⇒ `SHARED_BRIDGE_VERSION` 不动（保持 v7）。

@@ -30,7 +30,11 @@ export type AvailableModel = {
   defaultReasoningEffort: ReasoningEffort | null
 }
 
-const PROVIDER_MODELS_FETCH_TIMEOUT_MS = 5_000
+// round-183：5s 太短。这个端点在 app-server 忙（长轮次 / 水合中）时实测会超过
+// 5s，前端主动 abort 后浏览器 Network 面板留一条 `net::ERR_ABORTED` 红条，而
+// 调用方 catch 掉之后界面毫无提示 —— 用户只能看到「网络错误」却查不到东西。
+// 放宽到 12s：桥空闲时该端点只要 69–193ms，慢的场景也基本能在 12s 内返回。
+const PROVIDER_MODELS_FETCH_TIMEOUT_MS = 12_000
 // round-176：成功结果长缓存（原 30s——每过半分钟下一次选线程就要重付一次
 // 1–1.5s 的外部 provider 往返，是「模型列表有延迟」的来源之一）；过期后先回陈旧
 // 值并后台重验（stale-while-revalidate）；失败结果只短负缓存（原失败也缓存满

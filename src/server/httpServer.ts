@@ -8,6 +8,7 @@ import { createCodexBridgeMiddleware } from './codexAppServerBridge.js'
 import { createAuthSession } from './authMiddleware.js'
 import { createDirectoryListingHtml, createTextEditorHtml, decodeBrowsePath, getFilePreview, getLocalDirectoryListing, isTextEditableFile, listWorkspaceFiles, normalizeLocalPath } from './localBrowseUi.js'
 import { WebSocketServer, type WebSocket } from 'ws'
+import { attachHeartbeatToWebSocket } from './bridge/wsHeartbeat.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const distDir = join(__dirname, '..', 'dist')
@@ -340,6 +341,10 @@ export function createServer(options: ServerOptions = {}): ServerInstance {
       })
 
       wss.on('connection', (ws: WebSocket) => {
+        // round-183：空闲连接没有任何流量时，中间层（线上 nginx proxy_read_timeout
+        // = 120s）会直接判死，客户端看到 code=1006 并重连，重连后又触发一次
+        // `pending` 拉取。心跳让链路上始终有控制帧流动。
+        attachHeartbeatToWebSocket(ws)
         ws.send(JSON.stringify({ method: 'ready', params: { ok: true }, atIso: new Date().toISOString() }))
         const unsubscribe = bridge.subscribeNotifications((notification) => {
           if (ws.readyState !== 1) return

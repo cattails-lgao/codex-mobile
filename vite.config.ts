@@ -5,9 +5,11 @@ import { createDirectoryListingHtml, createTextEditorHtml, decodeBrowsePath, get
 import tailwindcss from "@tailwindcss/vite";
 import { spawnSync } from "node:child_process";
 import { createReadStream, existsSync, readFileSync } from "node:fs";
-import { stat, writeFile } from "node:fs/promises";
-import { basename, extname, isAbsolute } from "node:path";
+import { readFile, stat, writeFile } from "node:fs/promises";
+import { basename, extname, isAbsolute, join } from "node:path";
+import { createHash } from "node:crypto";
 import { WebSocketServer, type WebSocket } from "ws";
+import { attachHeartbeatToWebSocket } from "./src/server/bridge/wsHeartbeat";
 import pkg from "./package.json";
 
 const IMAGE_CONTENT_TYPES: Record<string, string> = {
@@ -110,6 +112,41 @@ function resolveViteRollbackDebugFallback(): string {
 
 const viteRollbackDebugFallback = resolveViteRollbackDebugFallback();
 
+// round-183：Service Worker 的缓存名必须随构建变化，否则浏览器认为 sw.js 没变，
+// 既不会重新 install，activate 也不会清旧缓存 —— 线上表现就是「重部署后某些
+// 标签页一直跑旧构建，清掉应用缓存才恢复」。这里把 dist/index.html 的指纹注入
+// 到 sw.js 里（index.html 里含全部 chunk 哈希，产物一变指纹必变）。
+const SW_BUILD_PLACEHOLDER = "__CODEX_SW_BUILD_ID__";
+
+async function stampServiceWorkerBuildId(outDir: string): Promise<void> {
+  const swPath = join(outDir, "sw.js");
+  if (!existsSync(swPath)) return;
+  const indexPath = join(outDir, "index.html");
+  const fingerprint = createHash("sha256")
+    .update(existsSync(indexPath) ? readFileSync(indexPath) : "no-index")
+    .digest("hex")
+    .slice(0, 10);
+  const raw = await readFile(swPath, "utf8");
+  const next = raw.includes(SW_BUILD_PLACEHOLDER)
+    ? raw.split(SW_BUILD_PLACEHOLDER).join(fingerprint)
+    : raw.replace(/codexweb-shell-[0-9a-z]+/g, `codexweb-shell-${fingerprint}`);
+  if (next !== raw) await writeFile(swPath, next, "utf8");
+}
+
+function assertServiceWorkerStamped(outDir: string): void {
+  const swPath = join(outDir, "sw.js");
+  if (!existsSync(swPath)) {
+    throw new Error(`codex-sw-version: ${swPath} 不存在，构建产物不完整`);
+  }
+  const stamped = readFileSync(swPath, "utf8");
+  if (stamped.includes(SW_BUILD_PLACEHOLDER) || !/codexweb-shell-[0-9a-z]{6,}/u.test(stamped)) {
+    throw new Error(
+      "codex-sw-version: sw.js 的 BUILD_ID 未被注入（占位符仍在）。"
+        + " 这样上线后会退回「缓存永不失效」的老行为，构建按失败处理。",
+    );
+  }
+}
+
 export default defineConfig({
   define: {
     "import.meta.env.VITE_WORKTREE_NAME": JSON.stringify(worktreeName),
@@ -134,6 +171,19 @@ export default defineConfig({
   plugins: [
     vue(),
     tailwindcss(),
+    {
+      name: "codex-sw-version",
+      apply: "build",
+      async writeBundle(options) {
+        await stampServiceWorkerBuildId(options.dir ?? "dist");
+      },
+      async closeBundle() {
+        // public/ 的拷贝与 writeBundle 的先后顺序在 Vite 版本间有差异，
+        // 这里再兜一次；重复注入是幂等的（占位符已被替换后走正则覆写分支）。
+        await stampServiceWorkerBuildId("dist");
+        assertServiceWorkerStamped("dist");
+      },
+    },
     {
       name: "codex-bridge",
       configureServer(server) {
@@ -163,6 +213,9 @@ export default defineConfig({
             });
 
             wss.on("connection", (ws: WebSocket) => {
+              // round-183：与 src/server/httpServer.ts 同口径加心跳，避免 dev
+              // （含 trycloudflare 隧道）下空闲 120s 被中间层掐断。
+              attachHeartbeatToWebSocket(ws);
               ws.send(
                 JSON.stringify({
                   method: "ready",
