@@ -18,7 +18,7 @@
 
 ### 2.1 时间构成（冷开，RPC 无人工延迟）
 
-- 首行墙钟 **1.3–2.7s**，其中 resume RPC **0.4–1.0s**（桥 + 4MB 响应，波动主导）
+- 首行墙钟 **1.3–2.7s**，其中 resume RPC **0.4–1.0s** 波动主导（**注**：探针夹具把 10 轮真实形态复制成 170 轮，响应体 4MB 是夹具造的；真实 resume 经桥只带 10 轮，见 §七 规模修正）
 - 客户端成本（首行 − resume 结束）**350–670ms**
 - 归一化 **不是瓶颈**：node 直测 `normalizeThreadMessagesV2` 全量 170 轮 **15–25ms**（初判「归一化 ~550ms」是把 LoAF 的 render 时间错算进 JS）
 
@@ -86,7 +86,7 @@
 | 延后保存（改后） | 1307 / 1334 / 1394ms | **1334ms** |
 
 - 中位 **省 65ms**，且**分布明显更稳**（改前方差 ~160ms，改后 ~45ms）
-- 诚实边界：65ms 不是「一档」。冷开 ~1.3s 的下限由「RPC + 4MB JSON + 首次挂载」共同决定，本轮一项都没能削减
+- 诚实边界：65ms 不是「一档」。本轮测出的冷开 ~1.3s 是**170 轮压力夹具**的上限，由「RPC + 夹具 4MB 响应 + 首次挂载」共同决定；真实线程（10 轮 / 543 items）不在此量级 —— 但同样说明**单次渲染成本已无可压空间**，详见 §七。
 
 ## 六、验证
 
@@ -96,12 +96,23 @@
 - 闸门：`check-ui-contract` **60**、`check-hot-window` **6**、`check-bottom-lock` **4**、`check-fonts` **13**、`check-message-media-surfaces` **44**、`check-agent-note-surfaces` **56**、`check-theme` **15**（对 `vite preview` 产物）
 - 构建：`vite build` + `tsup` 均 0
 
-## 七、下一步（需要决策，未开工）
+## 七、下一步 —— **已按历史核对修正**（原文三条建议两项已被覆盖）
 
-按收益/风险排序：
+> 本节初稿把三件事列为「待决策」。用户追问「之前不是有相似改动吗」，复核后确认：
+> 两项**已经存在**（一项已做完、一项代码已落地），第三项有**已回退的反例**。
 
-1. **动态 hot 起点**（中风险，估 200–300ms）：首片只归一化 6–8 轮，并把「首片轮次」锁定为 hot（后续旧轮次只进 warm），避免已显示内容被折叠。要改 `warmEndTurn` 的推导与升级策略。
-2. **变量高度虚拟列表**（高风险，估 500ms+）：估算高度 + 按需测量 + 滚动位置补偿。会打破 `check-hot-window` 的「sh 守恒 ±2px」不变式，需重写该闸门与整条滚动坐标链。
-3. **桥层 payload 瘦身**（中低风险，估 100–200ms）：`thread/resume` 响应 4MB，JSON.parse 是纯等待。属 `src/server/**` 改动 ⇒ 必须 bump `SHARED_BRIDGE_VERSION` 并重跑桥相关闸门。
+| 建议 | 历史对应物 | 现状 |
+|---|---|---|
+| ~~桥层 payload 瘦身~~ | `src/server/bridge/threadResumeTurnPage.ts`（round-84） | **已做完，无余量**。`thread/resume {threadId}` 已改写成 `{excludeTurns, initialTurnsPage:{limit, sortDirection:"desc", itemsView:"full"}}`，实测 2118ms/12.12MB → **486ms/4.29MB**；页大小 = `THREAD_RESPONSE_TURN_LIMIT = 10`（`src/server/bridge/core.ts:191`）⇒ **响应只带 10 轮**。§五 里说的「4MB JSON.parse」是**探针夹具自己造的**（170 轮 BODY），不是真实响应。 |
+| 变量高度虚拟列表 | `src/utils/turnVirtualizer.ts`（round-148 批 0，298 行 + 27 例） | **代码已在仓库，零调用点**。round-153 批 3a 的距底坐标就是给它铺的路；但 `sections/batch3-virtualization-assessment.md` §六 明确「不搬 `virtualized-turn-list` 28.7KB 实现」（与桌面端分组层深度耦合、我方不同构），批 3b/3c 改走**分层窗口化**并已落地（r163 折叠卡 + r165 hot 轮，含 RO 实测缓存与 sh 守恒）。接线虚拟化 = **推翻这两轮**，属回退性重做，不是增量。 |
+| 动态 hot 起点 | `HOT_TURNS = 30` 本就是 `warmPagination()` 的入参（`ThreadConversation.vue:1102 / :1244`） | **参数化已完成**，改的是推导策略而非新增能力。而本轮试过的 `tailOnly`（首帧只渲染尾部 8 块）就是它的近亲 ⇒ **已回退，仅省 47ms**。 |
 
-本轮不动它们：都不是「小优化」，且第 2 条与现有窗口化设计互斥。
+### 规模修正（比上面三条更要紧）
+
+真实最重线程夹具 `tmp/r166-real-read.json` = **10 轮 / 543 items / 1.38 MB**；本轮 170 轮是把它**复制 17 个周期**造的压力夹具。而 resume 只返回 10 轮 ⇒ **真实冷开的 hot 区就是 10 轮**，`tailOnly` 的触发门槛（> 30 轮）根本达不到。也就是说：
+
+- 第 1、2 项在**真实数据规模下收益接近零**（没有几十轮被强制渲染可省）；
+- 本轮测出的「首屏 895 行 / 单帧 patch 250ms」是**极端压力形态**，真实线程约 500–800 行；
+- 真实冷开慢的位置是 **app-server 侧 hydrate（round-84 实测 486ms）** 与首次挂载固定开销 —— 前者纯前端无解，后者本轮已证与行数弱相关。
+
+**结论：冷开这条线到此为止，不再立项。** 若要继续改善打开体验，方向应转为「减少必须等待的次数」（快照先上屏，r178 已做；`recentResumeThreadById` 合并已有），而不是压单次渲染成本。
