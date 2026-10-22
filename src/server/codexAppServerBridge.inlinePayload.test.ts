@@ -303,7 +303,7 @@ describe('thread inline media sanitization', () => {
 })
 
 describe('thread session skill recovery', () => {
-  it('adds selected skill inputs from session JSONL to matching user messages', () => {
+  it('adds selected skill inputs from session JSONL to matching user messages', async () => {
     const turns = [{
       id: 'turn-1',
       items: [{
@@ -335,14 +335,14 @@ describe('thread session skill recovery', () => {
       }),
     ].join('\n')
 
-    const merged = mergeSessionSkillInputsIntoTurns(turns, sessionLog) as typeof turns
+    const merged = (await mergeSessionSkillInputsIntoTurns(turns, sessionLog)) as typeof turns
     expect(merged[0].items[0].content).toEqual([
       { type: 'text', text: 'use a skill', text_elements: [] },
       { type: 'skill', name: 'browser-use:browser', path: '/Users/example/.codex/plugins/browser/SKILL.md' },
     ])
   })
 
-  it('does not duplicate skill inputs that are already present', () => {
+  it('does not duplicate skill inputs that are already present', async () => {
     const turns = [{
       id: 'turn-1',
       items: [{
@@ -369,10 +369,10 @@ describe('thread session skill recovery', () => {
       }),
     ].join('\n')
 
-    expect(mergeSessionSkillInputsIntoTurns(turns, sessionLog)).toBe(turns)
+    expect(await mergeSessionSkillInputsIntoTurns(turns, sessionLog)).toBe(turns)
   })
 
-  it('adds selected skill inputs to the last user message in a multi-message turn', () => {
+  it('adds selected skill inputs to the last user message in a multi-message turn', async () => {
     const turns = [{
       id: 'turn-1',
       items: [
@@ -408,7 +408,7 @@ describe('thread session skill recovery', () => {
       }),
     ].join('\n')
 
-    const merged = mergeSessionSkillInputsIntoTurns(turns, sessionLog) as typeof turns
+    const merged = (await mergeSessionSkillInputsIntoTurns(turns, sessionLog)) as typeof turns
     expect(merged[0].items[0].content).toEqual([{ type: 'text', text: 'first message', text_elements: [] }])
     expect(merged[0].items[2].content).toEqual([
       { type: 'text', text: 'second message', text_elements: [] },
@@ -637,8 +637,8 @@ describe('mergeSessionCommandsIntoTurns ordering', () => {
     JSON.stringify({ type: 'response_item', payload: { type: 'message', role: 'assistant', id: 'msg-3' } }),
   ].join('\n')
 
-  it('puts the final agent reply at the end when materialization collapsed replies', () => {
-    const result = mergeSessionCommandsIntoTurns(materializedTurns, sessionLog) as Array<{ items: Array<{ id: string; type: string }> }>
+  it('puts the final agent reply at the end when materialization collapsed replies', async () => {
+    const result = (await mergeSessionCommandsIntoTurns(materializedTurns, sessionLog)) as Array<{ items: Array<{ id: string; type: string }> }>
     const items = result[0].items
     expect(items[items.length - 1].type).toBe('agentMessage')
     expect(items.map((it) => it.type)).toEqual([
@@ -650,14 +650,14 @@ describe('mergeSessionCommandsIntoTurns ordering', () => {
     ])
   })
 
-  it('is idempotent across repeated recovery passes', () => {
-    const once = mergeSessionCommandsIntoTurns(materializedTurns, sessionLog) as Array<{ items: Array<{ id: string; type: string }> }>
-    const twice = mergeSessionCommandsIntoTurns(once, sessionLog) as Array<{ items: Array<{ id: string; type: string }> }>
+  it('is idempotent across repeated recovery passes', async () => {
+    const once = (await mergeSessionCommandsIntoTurns(materializedTurns, sessionLog)) as Array<{ items: Array<{ id: string; type: string }> }>
+    const twice = (await mergeSessionCommandsIntoTurns(once, sessionLog)) as Array<{ items: Array<{ id: string; type: string }> }>
     expect(twice[0].items.map((it) => it.type)).toEqual(once[0].items.map((it) => it.type))
     expect(twice[0].items[twice[0].items.length - 1].type).toBe('agentMessage')
   })
 
-  it('interleaves commands with text-bearing agent replies in rollout order', () => {
+  it('interleaves commands with text-bearing agent replies in rollout order', async () => {
     // round-34：模拟线上 rollout——模型在工具调用间隙发了很多「空文本」
     // assistant 消息（content 只有空 output_text），物化后只保留 2 条有文本
     // 回复。修复前空 assistant 也算 agent slot，agentSlotCount 虚高触发
@@ -688,7 +688,7 @@ describe('mergeSessionCommandsIntoTurns ordering', () => {
       JSON.stringify({ type: 'response_item', payload: { type: 'message', role: 'assistant', id: 'msg-2', content: [{ type: 'output_text', text: 'final reply' }] } }),
     ].join('\n')
 
-    const result = mergeSessionCommandsIntoTurns(materialized, log) as Array<{ items: Array<{ id: string; type: string }> }>
+    const result = (await mergeSessionCommandsIntoTurns(materialized, log)) as Array<{ items: Array<{ id: string; type: string }> }>
     expect(result[0].items.map((it) => it.type)).toEqual([
       'userMessage',
       'commandExecution',
@@ -700,7 +700,7 @@ describe('mergeSessionCommandsIntoTurns ordering', () => {
     ])
   })
 
-  it('keeps each reasoning item glued to the agent message that follows it', () => {
+  it('keeps each reasoning item glued to the agent message that follows it', async () => {
     // round-45：线上 rollout 最后轮——reasoning 与 agentMessage 在原始
     // items 里交错（每条思考紧贴其回复），但恢复逻辑里 reasoning 不是 slot，
     // 修复前全部被「追加收尾」挤到轮末，思考跑到模型回答之后。
@@ -727,7 +727,7 @@ describe('mergeSessionCommandsIntoTurns ordering', () => {
       JSON.stringify({ type: 'response_item', payload: { type: 'message', role: 'assistant', id: 'msg-2', content: [{ type: 'output_text', text: 'reply 2' }] } }),
     ].join('\n')
 
-    const result = mergeSessionCommandsIntoTurns(materialized, log) as Array<{ items: Array<{ id: string; type: string }> }>
+    const result = (await mergeSessionCommandsIntoTurns(materialized, log)) as Array<{ items: Array<{ id: string; type: string }> }>
     expect(result[0].items.map((it) => it.type)).toEqual([
       'userMessage',
       'reasoning',

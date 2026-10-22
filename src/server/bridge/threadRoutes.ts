@@ -9,6 +9,7 @@ import { readFile, stat } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { asRecord, getErrorMessage, readNonEmptyString, STREAM_EVENT_BUFFER_LIMIT, THREAD_RESPONSE_TURN_LIMIT } from './core.js'
 import { buildSessionFileChangeFallback, mergeSessionCommandsIntoThreadResult, mergeSessionCommandsIntoTurnsFromPath, mergeSessionSkillInputsIntoThreadResult } from './session.js'
+import { iterateSessionLogLines } from './sessionLogScan.js'
 import { resolveCommandOutputSpillPath } from './payloadSlimming.js'
 import type { BoundedThreadTurnPage } from './threadTurnPage.js'
 import type { ExternalSessionInfo } from '../externalSessionTracker.js'
@@ -245,8 +246,9 @@ export function handleThreadHttpRequest(
       }
 
       try {
-        const sessionLogRaw = await readFile(sessionPath, 'utf8')
-        setJson(res, 200, { data: buildSessionFileChangeFallback(threadReadResult, sessionLogRaw) })
+        // round-185：流式扫描，不再把整份 rollout 读成字符串。
+        const data = await buildSessionFileChangeFallback(threadReadResult, iterateSessionLogLines(sessionPath))
+        setJson(res, 200, { data })
       } catch {
         setJson(res, 200, { data: [] })
       }

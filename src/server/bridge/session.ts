@@ -6,6 +6,7 @@ import {
   runCommand,
   runCommandCapture,
 } from './core.js'
+import { iterateSessionLogLines, iterateSessionLogLinesFromText, type SessionLogLineSource } from './sessionLogScan.js'
 
 type SessionRecoveredFileChange = {
   path: string
@@ -35,6 +36,8 @@ type SessionSkillInputCacheEntry = {
 
 const SESSION_SKILL_INPUT_CACHE_LIMIT = 64
 const sessionSkillInputCache = new Map<string, SessionSkillInputCacheEntry>()
+// round-185：同一 (path, size, mtime) 的扫描只跑一趟，并发请求共享结果。
+const sessionSkillInputScanInFlight = new Map<string, Promise<Map<string, SessionRecoveredSkillInput[]>>>()
 
 type SessionLogRecoveryCacheEntry = {
   size: number
@@ -47,6 +50,8 @@ type SessionLogRecoveryCacheEntry = {
 
 const SESSION_LOG_RECOVERY_CACHE_LIMIT = 64
 const sessionLogRecoveryCache = new Map<string, SessionLogRecoveryCacheEntry>()
+// round-185：同一 (path, size, mtime, 轮次集合) 的扫描只跑一趟。
+const sessionLogRecoveryScanInFlight = new Map<string, Promise<Map<string, SessionItemSlot[]>>>()
 
 function rememberSessionLogRecovery(sessionPath: string, size: number, mtimeMs: number, recoverable: boolean): void {
   sessionLogRecoveryCache.delete(sessionPath)
@@ -67,11 +72,15 @@ function parseSessionSkillText(value: string): SessionRecoveredSkillInput | null
   return { name, path }
 }
 
-function buildSessionSkillInputsByTurn(sessionLogRaw: string): Map<string, SessionRecoveredSkillInput[]> {
+// round-185：入参从「整份日志字符串」改成「行源」，调用方负责流式供给；
+// 判定逻辑逐行不变（见 sessionLogScan.ts 的整读代价说明）。
+async function buildSessionSkillInputsByTurn(
+  lines: SessionLogLineSource,
+): Promise<Map<string, SessionRecoveredSkillInput[]>> {
   let currentTurnId = ''
   const skillsByTurnId = new Map<string, SessionRecoveredSkillInput[]>()
 
-  for (const line of sessionLogRaw.split('\n')) {
+  for await (const line of lines) {
     if (!line.trim()) continue
     let row: Record<string, unknown> | null = null
     try {
@@ -121,18 +130,34 @@ async function readCachedSessionSkillInputsByTurn(sessionPath: string): Promise<
     return cached.skillsByTurnId
   }
 
-  const sessionLogRaw = await readFile(sessionPath, 'utf8')
-  const skillsByTurnId = buildSessionSkillInputsByTurn(sessionLogRaw)
-  sessionSkillInputCache.set(sessionPath, {
-    size: sessionStat.size,
-    mtimeMs: sessionStat.mtimeMs,
-    skillsByTurnId,
-  })
-  if (sessionSkillInputCache.size > SESSION_SKILL_INPUT_CACHE_LIMIT) {
-    const oldestKey = sessionSkillInputCache.keys().next().value
-    if (oldestKey) sessionSkillInputCache.delete(oldestKey)
+  // round-185：流式扫描，峰值 = 一行 + 每轮技能清单（小），与日志大小无关。
+  // 同一文件版本并发请求共扫一次：181MB 日志单趟扫描约 1.2s 纯 I/O，此前
+  // 「几个标签页同时打开」＝几趟整读，CPU 与堆同时放大。
+  const scanKey = `${sessionPath}\u0000${sessionStat.size}\u0000${sessionStat.mtimeMs}`
+  const inFlight = sessionSkillInputScanInFlight.get(scanKey)
+  if (inFlight) return await inFlight
+
+  const scan = (async () => {
+    const skillsByTurnId = await buildSessionSkillInputsByTurn(iterateSessionLogLines(sessionPath))
+    sessionSkillInputCache.delete(sessionPath)
+    sessionSkillInputCache.set(sessionPath, {
+      size: sessionStat.size,
+      mtimeMs: sessionStat.mtimeMs,
+      skillsByTurnId,
+    })
+    while (sessionSkillInputCache.size > SESSION_SKILL_INPUT_CACHE_LIMIT) {
+      const oldestKey = sessionSkillInputCache.keys().next().value
+      if (!oldestKey) break
+      sessionSkillInputCache.delete(oldestKey)
+    }
+    return skillsByTurnId
+  })()
+  sessionSkillInputScanInFlight.set(scanKey, scan)
+  try {
+    return await scan
+  } finally {
+    sessionSkillInputScanInFlight.delete(scanKey)
   }
-  return skillsByTurnId
 }
 
 function mergeSessionSkillInputsIntoTurnsFromMap(
@@ -200,8 +225,12 @@ function mergeSessionSkillInputsIntoTurnsFromMap(
   return changed ? nextTurns : turns
 }
 
-export function mergeSessionSkillInputsIntoTurns(turns: unknown[], sessionLogRaw: string): unknown[] {
-  return mergeSessionSkillInputsIntoTurnsFromMap(turns, buildSessionSkillInputsByTurn(sessionLogRaw))
+// round-185：核心扫描改为异步（文件侧走流），这个字符串入口随之返回 Promise。
+// 仅 rpc 回显与单测使用；生产路径走 mergeSessionSkillInputsIntoThreadResult。
+// session-log-memory: allow —— 入参由调用方提供（测试 / rpc 回显），本函数不读文件。
+export async function mergeSessionSkillInputsIntoTurns(turns: unknown[], sessionLogRaw: string): Promise<unknown[]> {
+  const skillsByTurnId = await buildSessionSkillInputsByTurn(iterateSessionLogLinesFromText(sessionLogRaw))
+  return mergeSessionSkillInputsIntoTurnsFromMap(turns, skillsByTurnId)
 }
 
 export async function mergeSessionSkillInputsIntoThreadResult(result: unknown): Promise<unknown> {
@@ -370,7 +399,10 @@ function parseApplyPatchInput(input: string): SessionRecoveredFileChange[] {
   return changes
 }
 
-export function buildSessionFileChangeFallback(threadReadPayload: unknown, sessionLogRaw: string): SessionRecoveredTurnFileChanges[] {
+export async function buildSessionFileChangeFallback(
+  threadReadPayload: unknown,
+  lines: SessionLogLineSource,
+): Promise<SessionRecoveredTurnFileChanges[]> {
   const payload = asRecord(threadReadPayload)
   const thread = asRecord(payload?.thread)
   const turns = Array.isArray(thread?.turns) ? thread.turns : []
@@ -387,7 +419,7 @@ export function buildSessionFileChangeFallback(threadReadPayload: unknown, sessi
   const collectedByTurnId = new Map<string, SessionRecoveredFileChange[]>()
   let currentTurnId = ''
 
-  for (const line of sessionLogRaw.split('\n')) {
+  for await (const line of lines) {
     if (!line.trim()) continue
     let row: Record<string, unknown> | null = null
     try {
@@ -526,13 +558,16 @@ function isRecoverableToolPayload(payload: Record<string, unknown>): boolean {
   return payload.type === 'custom_tool_call' && name === 'apply_patch'
 }
 
-function buildSessionItemOrder(sessionLogRaw: string, turnIds: Set<string>): SessionItemOrderScan {
+async function buildSessionItemOrder(
+  lines: SessionLogLineSource,
+  turnIds: Set<string>,
+): Promise<SessionItemOrderScan> {
   let currentTurnId = ''
   const orderByTurnId = new Map<string, SessionItemSlot[]>()
   const callIdToCommand = new Map<string, SessionRecoveredCommand>()
   let sawRecoverableToolRow = false
 
-  for (const line of sessionLogRaw.split('\n')) {
+  for await (const line of lines) {
     if (!line.trim()) continue
     let row: Record<string, unknown> | null = null
     try {
@@ -669,20 +704,21 @@ function extractFilePathsFromCommand(cmd: string, cwd: string): string[] {
   return [...new Set(paths)]
 }
 
-type CollectedTurnFileInfo = {
+export type CollectedTurnFileInfo = {
   patchInputs: { callId: string; input: string }[]
   commandFilePaths: string[]
 }
 
-export function collectFileChangesForTurns(
-  sessionLogRaw: string,
+// round-185：入参改成行源（流式），判定逻辑不变。
+export async function collectFileChangesForTurns(
+  lines: SessionLogLineSource,
   turnIdsToRevert: Set<string>,
   cwd: string,
-): Map<string, CollectedTurnFileInfo> {
+): Promise<Map<string, CollectedTurnFileInfo>> {
   let currentTurnId = ''
   const infoByTurnId = new Map<string, CollectedTurnFileInfo>()
 
-  for (const line of sessionLogRaw.split('\n')) {
+  for await (const line of lines) {
     if (!line.trim()) continue
     let row: Record<string, unknown> | null = null
     try {
@@ -1149,11 +1185,13 @@ function collectTurnIds(turns: unknown[]): Set<string> {
   return turnIds
 }
 
-export function mergeSessionCommandsIntoTurns(turns: unknown[], sessionLogRaw: string): unknown[] {
+// round-185：同 mergeSessionSkillInputsIntoTurns，字符串入口改异步。
+// session-log-memory: allow —— 入参由调用方提供，本函数不读文件。
+export async function mergeSessionCommandsIntoTurns(turns: unknown[], sessionLogRaw: string): Promise<unknown[]> {
   const turnIds = collectTurnIds(turns)
   if (turnIds.size === 0) return turns
 
-  const { orderByTurnId } = buildSessionItemOrder(sessionLogRaw, turnIds)
+  const { orderByTurnId } = await buildSessionItemOrder(iterateSessionLogLinesFromText(sessionLogRaw), turnIds)
   return mergeSessionCommandsIntoTurnsFromOrder(turns, orderByTurnId)
 }
 
@@ -1317,9 +1355,22 @@ export async function mergeSessionCommandsIntoTurnsFromPath(turns: unknown[], se
     return turns
   }
 
-  const sessionLogRaw = await readFile(sessionPath, 'utf8')
-  const { orderByTurnId, sawRecoverableToolRow } = buildSessionItemOrder(sessionLogRaw, turnIds)
-  rememberSessionLogRecovery(sessionPath, sessionStat.size, sessionStat.mtimeMs, sawRecoverableToolRow)
+  // round-185：流式扫描（此前整读，见 sessionLogScan.ts 的实测数据）。同一文件
+  // 版本 + 同一批轮次的并发请求共享一趟扫描；扫描结果本身**不缓存**——
+  // orderByTurnId 带着恢复出来的命令输出正文，按线程留着就是这次要根治的内存
+  // 增长（181MB 线程的日志里命令输出占了绝大部分）。
+  const scanKey = `${sessionPath}\u0000${sessionStat.size}\u0000${sessionStat.mtimeMs}\u0000${[...turnIds].sort().join(',')}`
+  let scan = sessionLogRecoveryScanInFlight.get(scanKey)
+  if (!scan) {
+    scan = (async () => {
+      const { orderByTurnId, sawRecoverableToolRow } = await buildSessionItemOrder(iterateSessionLogLines(sessionPath), turnIds)
+      rememberSessionLogRecovery(sessionPath, sessionStat.size, sessionStat.mtimeMs, sawRecoverableToolRow)
+      return orderByTurnId
+    })()
+    sessionLogRecoveryScanInFlight.set(scanKey, scan)
+    void scan.catch(() => undefined).finally(() => sessionLogRecoveryScanInFlight.delete(scanKey))
+  }
+  const orderByTurnId = await scan
   return mergeSessionCommandsIntoTurnsFromOrder(turns, orderByTurnId)
 }
 

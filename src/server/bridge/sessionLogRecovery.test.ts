@@ -65,10 +65,10 @@ async function withTempLog(contents: string, run: (path: string) => Promise<void
 }
 
 describe('mergeSessionCommandsIntoTurns with a current-shape session log', () => {
-  it('returns the turn untouched when the log only carries custom_tool_call exec rows', () => {
+  it('returns the turn untouched when the log only carries custom_tool_call exec rows', async () => {
     const turns = turnWithCommandAfterReply
 
-    const result = mergeSessionCommandsIntoTurns(turns, currentShapeLog)
+    const result = await mergeSessionCommandsIntoTurns(turns, currentShapeLog)
 
     // Same array, same item order: the app-server's own interleaving is the
     // best available answer and the recovery must not touch it.
@@ -85,7 +85,7 @@ describe('mergeSessionCommandsIntoTurns with a current-shape session log', () =>
     ])
   })
 
-  it('is not fooled by a current-shape log whose output text mentions exec_command', () => {
+  it('is not fooled by a current-shape log whose output text mentions exec_command', async () => {
     // These names show up inside command output in real rollouts (a `grep
     // exec_command`, a printed help text), so the shape probe has to read row
     // types rather than scan the raw text for them.
@@ -96,10 +96,10 @@ describe('mergeSessionCommandsIntoTurns with a current-shape session log', () =>
     ].join('\n')
     const turns = turnWithCommandAfterReply
 
-    expect(mergeSessionCommandsIntoTurns(turns, noisyLog)).toBe(turns)
+    expect(await mergeSessionCommandsIntoTurns(turns, noisyLog)).toBe(turns)
   })
 
-  it('still interleaves a retired-shape log, so legacy sessions keep their recovery', () => {
+  it('still interleaves a retired-shape log, so legacy sessions keep their recovery', async () => {
     const materialized: TestTurn[] = [
       {
         id: 'turn-1',
@@ -111,7 +111,7 @@ describe('mergeSessionCommandsIntoTurns with a current-shape session log', () =>
       },
     ]
 
-    const result = mergeSessionCommandsIntoTurns(materialized, retiredShapeLog) as TestTurn[]
+    const result = (await mergeSessionCommandsIntoTurns(materialized, retiredShapeLog)) as TestTurn[]
 
     expect(result).not.toBe(materialized)
     expect(result[0]!.items.map((item) => item.type)).toEqual([

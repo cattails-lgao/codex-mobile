@@ -25,6 +25,7 @@ import {
 } from '../../types/codex'
 import {
   normalizeThreadGroupsV2,
+  normalizeThreadMessagesFromNewestFirstPages,
   normalizeThreadMessagesV2,
   normalizeThreadMessagesV2Progressive,
   normalizeThreadSummaryV2,
@@ -608,6 +609,12 @@ export async function renameThread(threadId: string, threadName: string): Promis
   await callRpc('thread/name/set', { threadId, name: threadName })
 }
 
+// round-185：`thread/revert` 之后补水每页的轮次数。20 轮在线上 181MB 线程上约
+// 4MB / 1.8s，峰值约为「一次要 100 轮」的 1/5。
+const REVERT_HYDRATE_PAGE_TURNS = 20
+// 与 app-server 单页钳制上限一致（round-104：limit 给多大都只回 100 轮）。
+const REVERT_HYDRATE_MAX_TURNS = 100
+
 // round-106：codex 0.156 起已移除废弃的 `thread/rollback`（#44915），0.159 上对任何
 // 线程都只剩 `thread/revert {threadId, beforeTurnId}` 一条回退路径，legacy 按轮数回滚
 // 不再存在。`beforeTurnId` 为要移除的首个轮次 id：
@@ -618,21 +625,37 @@ export async function revertThread(threadId: string, beforeTurnId: string): Prom
   // 触发全量重灌（可见的「刷新」）。改用返回的游标去 thread/turns/list 增量 hydrate
   // 裁剪后的历史——游标天然指向裁剪后保留历史的末尾，无需自行计算。
   const payload = await callRpc<ThreadRevertResponse>('thread/revert', { threadId, beforeTurnId })
-  if (!payload.turnsBackwardsCursor) return []
-  const page = await callRpc<ThreadTurnsListResponse>('thread/turns/list', {
-    threadId,
-    cursor: payload.turnsBackwardsCursor,
-    sortDirection: 'desc',
-    limit: 200,
-    itemsView: 'full',
-  })
-  // round-79：desc 分页返回 newest-first（实测确认），normalize 按输入顺序保序并按
-  // 输入顺序递增 turnIndex——直接消费会把整段保留历史倒序渲染（最老消息沉底、形似
-  // 最新），且 turnIndex 全部反向破坏后续回退的轮次计算。反转成时间序后再 normalize。
-  return normalizeThreadMessagesV2(
-    { thread: { ...payload.thread, turns: [...page.data].reverse() } } as ThreadReadResponse,
-    0,
-  )
+  let cursor = readString(payload.turnsBackwardsCursor) ?? ''
+  if (!cursor) return []
+
+  // round-185：**分批**补水，不再一次性索要 200 轮全量 items。
+  // 线上那条 181MB 线程上，单条 `{limit: 200, itemsView: "full"}`（app-server 钳到
+  // 100 轮）响应 20.6MB / 9.1s，桥侧堆峰值 +245MB；与同时进行的 `thread/read`
+  // 叠加就是 19:47 / 21:57 那两次 core dump 的同类形态。按
+  // REVERT_HYDRATE_PAGE_TURNS 分页取回、逐页归一化后立刻丢掉原始图，峰值从
+  // 「整段保留历史」降到「一页」，而**返回的消息列表逐位不变**
+  // （等价性见 normalizers/v2 的 normalizeThreadMessagesFromNewestFirstPages 与
+  //  threads.revertHydration.test.ts）。
+  const pages: unknown[][] = []
+  let hydratedTurns = 0
+  while (cursor && hydratedTurns < REVERT_HYDRATE_MAX_TURNS) {
+    const page = await callRpc<ThreadTurnsListResponse>('thread/turns/list', {
+      threadId,
+      cursor,
+      sortDirection: 'desc',
+      limit: Math.min(REVERT_HYDRATE_PAGE_TURNS, REVERT_HYDRATE_MAX_TURNS - hydratedTurns),
+      itemsView: 'full',
+    })
+    const turns = Array.isArray(page.data) ? page.data : []
+    if (turns.length === 0) break
+    pages.push(turns)
+    hydratedTurns += turns.length
+    cursor = readString(page.nextCursor) ?? ''
+  }
+  // round-79：desc 分页返回 newest-first（实测确认），归一化按输入顺序保序并按输入
+  // 顺序递增 turnIndex——直接消费会把整段保留历史倒序渲染。分页版归一化器负责逐页
+  // 反转 + turnIndex 平移 + 末尾跨轮修正，与「一次性全量 normalize」逐位一致。
+  return normalizeThreadMessagesFromNewestFirstPages(pages, asRecord(payload.thread) ?? {})
 }
 
 // round-141：回退前的权威校验。取服务端**最新一页**轮次 id，并告知这一页是否就是

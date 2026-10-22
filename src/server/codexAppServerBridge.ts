@@ -261,7 +261,9 @@ import {
   collectFileChangesForTurns,
   mergeSessionCommandsIntoTurns,
   revertTurnFileChanges,
+  type CollectedTurnFileInfo,
 } from './bridge/session.js'
+import { iterateSessionLogLines } from './bridge/sessionLogScan.js'
 // 会话领域切片（E 批）公共导出保持原样：mergeSessionSkillInputsIntoTurns /
 // mergeSessionCommandsIntoTurns / pathSetMatchesChange / revertTurnFileChanges
 // 此前是公共导出，供消费者（含测试）继续从本模块导入。
@@ -392,6 +394,9 @@ const MERGEABLE_ITEM_TYPES = new Set([
   'commandExecution',
   'fileChange',
 ])
+
+// round-185：`thread/read` 快照的常驻条目上限（见 storeThreadReadSnapshot）。
+const THREAD_READ_SNAPSHOT_LIMIT = 8
 
 class AppServerProcess {
   private process: ChildProcessWithoutNullStreams | null = null
@@ -639,7 +644,17 @@ class AppServerProcess {
   }
 
   storeThreadReadSnapshot(threadId: string, snapshot: unknown): void {
+    // round-185：这个 Map 此前按线程**无界常驻** —— 每份快照是「最近 10 轮」的读结果，
+    // 重线程上可达 MB 级，开过的线程越多堆越高（与 rollout 整读同属「用久了就爆」）。
+    // 它只服务「刚读过又恰好读失败」的兜底（route 里 `if (snapshot)`），因此按 LRU 限
+    // 条目数即可：淘汰后走既有的「无快照」分支，语义不变。
+    this.lastThreadReadSnapshotByThreadId.delete(threadId)
     this.lastThreadReadSnapshotByThreadId.set(threadId, snapshot)
+    while (this.lastThreadReadSnapshotByThreadId.size > THREAD_READ_SNAPSHOT_LIMIT) {
+      const oldestThreadId = this.lastThreadReadSnapshotByThreadId.keys().next().value
+      if (!oldestThreadId) break
+      this.lastThreadReadSnapshotByThreadId.delete(oldestThreadId)
+    }
     // round-136：这里以前把上翻的全量读缓存一起删。但「存一份快照」并不改变轮次，
     // 而 `thread/read` 也走这条管道 —— 一次纯读就把缓存清空，正是 round-132 §四
     // 里「探针每次上翻前先发一条 thread/read，于是每次都冷」的自污染来源。真正的
@@ -2184,15 +2199,19 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
             return
           }
 
-          let sessionLogRaw: string
+          // round-185：流式扫描（此前整读 rollout —— 编辑、撤销文件改动都会走到
+          // 这里，大线程的日志会整份进堆）。读失败与以前一样回 200 + 错误文案。
+          let turnInfos: Map<string, CollectedTurnFileInfo>
           try {
-            sessionLogRaw = await readFile(sessionPath, 'utf8')
+            turnInfos = await collectFileChangesForTurns(
+              iterateSessionLogLines(sessionPath),
+              turnIdsToRevert,
+              cwd,
+            )
           } catch {
             setJson(res, 200, { reverted: 0, errors: ['Could not read session log'], message: 'Session log unreadable' })
             return
           }
-
-          const turnInfos = collectFileChangesForTurns(sessionLogRaw, turnIdsToRevert, cwd)
           if (turnInfos.size === 0) {
             setJson(res, 200, { changed: 0, errors: [], message: action === 'redo' ? 'No file changes to redo' : 'No file changes to revert' })
             return

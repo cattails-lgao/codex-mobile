@@ -29,6 +29,7 @@ import {
 } from './threadPreferencesRoutes.js'
 import { persistWorkspaceRoot } from './workspaceRoots.js'
 import { parseStoredProjectZip, type ProjectZipVirtualEntry } from './zip.js'
+import { readSessionLogFirstLine } from './sessionLogScan.js'
 
 export async function collectProjectChatZipEntries(projectRoot: string): Promise<ProjectZipVirtualEntry[]> {
   const canonicalProjectRoot = await realpath(projectRoot)
@@ -54,13 +55,15 @@ export async function collectProjectChatZipEntries(projectRoot: string): Promise
   for (const root of roots) {
     for await (const sessionPath of walkFiles(root.disk)) {
       if (extname(sessionPath) !== '.jsonl') continue
-      let raw = ''
+      // round-185：导出只需要 `session_meta`（永远是第 1 行），此前却把每条
+      // rollout 整份读进内存——导出含大线程的项目时是 GB 级峰值。
+      let metaLine = ''
       try {
-        raw = await readFile(sessionPath, 'utf8')
+        metaLine = await readSessionLogFirstLine(sessionPath)
       } catch {
         continue
       }
-      const sessionCwd = readSessionMetaCwd(raw)
+      const sessionCwd = readSessionMetaCwd(metaLine)
       if (!sessionCwd) continue
       let canonicalSessionCwd = ''
       try {
@@ -71,7 +74,7 @@ export async function collectProjectChatZipEntries(projectRoot: string): Promise
       if (!isSameOrDescendantPath(canonicalSessionCwd, canonicalProjectRoot)) continue
       const rel = relative(root.disk, sessionPath).split(sep).join('/')
       const zipPath = `${root.zip}/${rel}`
-      const sessionId = readSessionMetaId(raw)
+      const sessionId = readSessionMetaId(metaLine)
       const stateMetadata = sessionId ? stateDbThreadMetadata.get(sessionId) : undefined
       const title = readNonEmptyString(stateMetadata?.title) || (sessionId ? readNonEmptyString(threadTitles.titles[sessionId]) : '')
       if (title) exportedTitles[zipPath] = title

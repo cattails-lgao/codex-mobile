@@ -898,6 +898,54 @@ export function finalizeNormalizedThreadMessages(messages: UiMessage[]): UiMessa
 }
 
 /**
+ * round-185：把「按游标分页取回的若干页轮次」归一化成与一次性全量归一化**逐位一致**
+ * 的升序消息列表。
+ *
+ * 为什么需要：`thread/revert` 之后的补水面此前固定发一条
+ * `thread/turns/list {limit: 200, itemsView: 'full'}`，app-server 钳到 100 轮；在线上
+ * 那条 181MB 线程上这一条响应 20.6MB、桥侧堆峰值 +245MB（实测）。分页取回后每页
+ * 单独归一化即可把峰值压到「一页」，历史完整性不变。
+ *
+ * 入参口径：`pages[0]` 是最新一页，**每页内部也是 newest-first**（desc 分页的原始顺序，
+ * 与 `thread/turns/list {sortDirection:'desc'}` 一致）。逐页反转成时间序后，用「比它更旧
+ * 的轮数」平移 turnIndex —— 逐页归一化各自从 0 起算，平移后与整段从 0 起算等价；跨轮
+ * 修正（压缩折叠 / compaction 归位）仍在最后对完整列表跑一次，与全量路径同序。
+ */
+export function normalizeThreadMessagesFromNewestFirstPages(
+  pages: unknown[][],
+  threadShell: Record<string, unknown> = {},
+): UiMessage[] {
+  if (pages.length === 0) return []
+
+  const ascendingChunks: UiMessage[][] = []
+  const turnCounts: number[] = []
+  for (let pageIndex = pages.length - 1; pageIndex >= 0; pageIndex -= 1) {
+    const turns = pages[pageIndex] ?? []
+    ascendingChunks.push(
+      normalizeThreadTurnsRaw(
+        { thread: { ...threadShell, turns: [...turns].reverse() } } as ThreadReadResponse,
+        0,
+      ),
+    )
+    turnCounts.push(turns.length)
+  }
+
+  const messages: UiMessage[] = []
+  let offset = 0
+  for (let chunkIndex = 0; chunkIndex < ascendingChunks.length; chunkIndex += 1) {
+    const chunk = ascendingChunks[chunkIndex]
+    if (offset !== 0) {
+      for (const message of chunk) {
+        if (typeof message.turnIndex === 'number') message.turnIndex += offset
+      }
+    }
+    messages.push(...chunk)
+    offset += turnCounts[chunkIndex]
+  }
+  return finalizeNormalizedThreadMessages(messages)
+}
+
+/**
  * round-178：渐进归一化——列表是贴底跟随的（首屏看到的是**最新**轮次），所以
  * 分片顺序取「从最新往旧」：先归一化最新 THREAD_NORMALIZE_CHUNK_TURNS 轮立刻经
  * `onPartialMessages` 上屏（等价于热窗口需要的全部内容），余量按片补齐（每片
