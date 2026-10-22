@@ -1431,4 +1431,43 @@ UI 契约 **61/61**（+1 条）· 失败路径探针（revert 500 + 1.2s 延迟�
 
 **诚实边界**：用户那次现场未复现；「读不到 rollout ⇒ 0 轮」的实测对象是合成 rollout；隔离 home 不被索引
 （手工 rollout 跑不了真实 revert）；失败提示为英文字面量。详见 [round-184](../rounds/round-184-edit-save-feedback.md)。
+---
+
+## round-185 · 桥层「整读 rollout」根治 —— 会话日志流式扫描 + revert 分页补水（2026-10-22）
+
+**用户口径**：**「不是止损，我要功能完整的情况下完全修复，不会再出现这个问题」** ⇒ 不做「大文件跳过 / 限制条目」这类降级，
+恢复逻辑对任意大小的日志照旧生效，只把读取方式改成内存有界。
+
+**线上取证**（1.15.149.204 / 桥 0.1.136 / codex 0.163.0，全程只读，未写用户数据）：
+
+1. `journalctl -u codexapp` 有两次 `FATAL ERROR: Reached heap limit`：**19:47:43**（用户报障时间窗内、非我所为）与
+   **21:57:55**（我的只读压测触发）。崩溃栈 `v8::String::NewFromUtf8` + `node::StringDecoder::DecodeData` ⇒ 巨型字符串解码。
+2. **触发条件是 rollout 字节数，不是轮次数**：103 轮 / 686KB 夹具上「编辑 → 保存」线上全链路 **PASS**
+   （`thread/revert` 187–608ms → `turn/start{turnTrigger:"edit_user_message"}` 200）；181MB 真线程单发 `thread/read`
+   就 RSS 438 → **1027MB**（+589MB、残留 724MB），4 路并发 **988MB → 四条 socket hang up → 进程 core-dump**。
+3. revert 补水固定发 `{limit:200, itemsView:"full"}`（app-server 钳到 100 轮）＝ **20.6MB / 9.1s / +245MB**。
+
+**根因**：四处 `readFile(sessionPath, "utf8")` 整读 rollout（技能输入恢复 / 命令时序恢复 / 文件改动回收 / 项目 ZIP 只为取
+`session_meta` 却读整份）+ 上述 200 轮全量页 + `lastThreadReadSnapshotByThreadId` 按线程无界常驻。
+
+**改动**：新增 `src/server/bridge/sessionLogScan.ts`（`createReadStream` 64KiB + `readline`，`finally` 销毁流；
+`SessionLogLineSource = AsyncIterable<string>` **有意排除同步可迭代**，否则 `string` 会被按字符扫）；
+`session.ts` 四个扫描器入参改行源、循环 `for await`、判定逻辑零改动；同文件版本扫描加 in-flight 单飞（扫描结果
+**不缓存** —— 命令输出正文按线程留着正是要根治的内存增长）；`projectZip.ts` 只读首行；`threadRoutes.ts` /
+`codexAppServerBridge.ts` 两处路由随之流式；`revertThread` 改 5×20 轮分页 + 新纯函数
+`normalizeThreadMessagesFromNewestFirstPages`（逐页反转 + `turnIndex` 平移 + 末尾跨轮修正）；快照 Map 加 LRU 8；
+新闸门 `scripts/check-session-log-memory.cjs`（`--selftest` 8 例；`session-log-memory: allow` 显式例外 4 处并打印计数）。
+
+**线上复测**（部署本轮构建后，同一条 181MB 线程）：单发 `thread/read` 402 → **412MB**（+10）；4 路并发（冷缓存，4.9s/路）
+峰值 **420MB**、四路全 200、进程存活；UI 端到端（夹具 103 轮）`thread/revert` 200 后 **5 页 × limit 20** 全 200、
+无 `limit>20` 的 full 请求、编辑文本 1.0s 上屏；22:15 部署后无 FATAL。
+
+**验证**：`vue-tsc` EXIT=0 · 全量单测 **1107/1107（101 文件）**（+2 文件 / +12 例）· `vite build` 0 · `tsup` 0 ·
+UI 契约 61/61 · 脱敏 0 · md-links 0 · 派生 doc 0 · `check-session-log-memory` 0（61 文件 / 0 处整读 / 4 处显式例外）。
+
+**提交**：`<round-185 代码 + 闸门 + 单测>` + 本段所在提交（文档）。
+
+**诚实边界**：线上包 `version` 仍是 `0.1.136`（构建被直接覆盖，需发 0.1.137 对齐）；只做几十秒级压测、无长跑浸泡；
+`streamEventsByThreadId` 仍「每线程 400 帧、线程数无界」；`turns/list` 的单发大页能力仍在（只改了本仓 revert 路径）；
+快照 LRU 无单测（需真实子进程）。详见 [round-185](../rounds/round-185-session-log-streaming.md)。
 
