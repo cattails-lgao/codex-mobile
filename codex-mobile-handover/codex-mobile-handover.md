@@ -6,7 +6,7 @@
 
 | 项 | 值 |
 |---|---|
-| Git 分支 | `main`（**领先 `origin/main` 2 笔待推** —— round-184 的「代码 + 闸门」提交与「文档」提交；本仓口径：**「已同步」必须在推送成功后由闭环回填提交写回**，见 [round-162](rounds/round-162-selftest-fixture-and-product-baseline-reverify.md) 的教训）· 当前进度 **round-184**（未发版） |
+| Git 分支 | `main`（**已同步 `origin/main`，落后 0** —— round-184 两笔提交（`ef8f714c` 代码 + 闸门 / `59fa22da` 文档）已于 2026-10-22 **20:47 经本机 7890 代理单次推送成功**（`13805cb1..59fa22da`）；此前直连 github 超时、本机代理均在 7890）· 当前进度 **round-184**（未发版） |
 | Dev 端口 | 4173 |
 | Dev 状态 | **round-184（本笔）**：编辑保存失败可见化 —— 失败原因改走**会话内 turn error 行**（App 不再写无渲染位的 `desktopError`）· 保存期间按钮 `disabled` + `Saving…` + `cursor-progress` · 失败时编辑器保持打开、已编辑文本不丢 · `rollbackSelectedThread` 返回显式状态（`ThreadRollbackResult` 7 值）· 假「服务端已删除」在强制重读推翻后 fall-through 到真 `thread/revert` · 四道闸门：`vue-tsc` **0**、单测 **1095/1095 / 99 文件**、`vite build` **0**（13.28s）、UI 契约 **61/61**（+1 条）· **Dev 服务未常驻**：本轮取证期间在 `--port 5176` 起过 `vite dev`，收工已停；`4173` 未启 |
 | App-server | **未常驻**（无 dev server ⇒ 无桥、无 app-server 子进程；`4173` 无监听）· 本轮真机取证 = **隔离 home + 真 app-server 0.162.1**：`thread/list` 在隔离 home 回 **0**（只读状态库、**不扫 `sessions/`**），手工产出的 rollout 只能被 `thread/read`（按 id）看到、`thread/revert` 回 `thread not found`；同时拿到关键读数 —— 读不到 rollout 时 `thread/turns/list` 回 **`count=0, nextCursor=null`**（不报错）· 历史**全量普查**（round-159）：**170** 方法 → `OK 62 / IMPLEMENTED 86 / UNDETERMINED 13 / SKIPPED 5 / NOT_IMPLEMENTED 4`（`node scripts/probe-app-server-methods.cjs` 可复跑）· `CODEXUI_CODEX_COMMAND` **未设置** ⇒ 走 PATH 上的 pnpm 全局 |
