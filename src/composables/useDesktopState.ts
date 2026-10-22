@@ -323,6 +323,19 @@ export function insertModelSwitchMarkers(realMessages: UiMessage[], markers: UiM
   return result
 }
 
+// round-184：回退结果的**显式状态**。
+// 此前 rollbackSelectedThread 只 set error / 静默 return，调用方（编辑保存）只能靠
+// 「目标轮还在不在列表里」反推成败；而 `error` 这个全局 ref 在 UI 上没有任何渲染位
+// ⇒ 失败时用户看到的正是「点了保存什么都没发生」。改成返回状态，调用方才有据可依。
+export type ThreadRollbackResult =
+  | 'reverted'
+  | 'reconciled'
+  | 'already-busy'
+  | 'no-thread'
+  | 'no-turn'
+  | 'no-persisted'
+  | 'failed'
+
 export function useDesktopState() {
   const projectGroups = ref<UiProjectGroup[]>([])
   const sourceGroups = ref<UiProjectGroup[]>([])
@@ -3418,11 +3431,11 @@ export function useDesktopState() {
     savePersistedReasoningMap(persistedReasoningByThreadId.value)
   }
 
-  async function rollbackSelectedThread(turnId: string): Promise<void> {
+  async function rollbackSelectedThread(turnId: string): Promise<ThreadRollbackResult> {
     const threadId = selectedThreadId.value
-    if (!threadId) return
-    if (isRollingBack.value) return
-    if (!turnId.trim()) return
+    if (!threadId) return 'no-thread'
+    if (isRollingBack.value) return 'already-busy'
+    if (!turnId.trim()) return 'no-turn'
 
     isRollingBack.value = true
     error.value = ''
@@ -3438,7 +3451,7 @@ export function useDesktopState() {
       // 最新持久化轮次即回退水印：优先用目标轮自身的 turnIndex，取不到再走
       // 增量轮次映射兜底（通知增量通道写入的存档可能缺 turnIndex）。
       const maxTurnIndex = persisted.reduce((max, m) => (typeof m.turnIndex === 'number' && m.turnIndex > max ? m.turnIndex : max), -1)
-      if (maxTurnIndex < 0) return
+      if (maxTurnIndex < 0) return 'no-persisted'
       let turnIndex = typeof matchedMessage?.turnIndex === 'number'
         ? matchedMessage.turnIndex
         : (turnIndexByTurnIdByThreadId.value[threadId]?.[turnId] ?? -1)
@@ -3476,6 +3489,13 @@ export function useDesktopState() {
       // 轮次可以长期留在列表里（线上 round-141：列表里那条消息点回退只报「不存在」）。
       // 一旦确证目标轮在服务端已不存在，就不要再发注定失败的 thread/revert：回退语义
       // 在服务端其实已经完成了，本地对齐即可（剔除该轮 + 强制重读一次）。
+      // round-184：`thread/turns/list` 在**读不到 rollout 时也回「0 轮 + nextCursor 空」**
+      // （0.162.1 实测：一条 app-server 解析不了的 rollout，turns/list 返回
+      // `count=0, nextCursor=null`）。isTargetTurnMissingOnServer 只认
+      // `complete && !turnIds.includes(turnId)`，于是「读不到」会被当成「服务端已删除」，
+      // 走进下面的本地对齐分支：本地剔除 + 强制重读——重读又把该轮装回来，调用方
+      // 「目标轮还在不在」的判据随即成立 ⇒ 编辑保存既不重发也不给任何提示。
+      // 所以本地对齐后必须复核：轮次若被重读装回来了，就老实发 thread/revert。
       if (await isTargetTurnMissingOnServer(threadId, beforeTurnId)) {
         console.warn(
           `[rollback] ${threadId}: turn ${beforeTurnId} is already gone on the server; reconciling locally instead of sending thread/revert`,
@@ -3493,7 +3513,15 @@ export function useDesktopState() {
         } catch {
           // 对齐失败不影响「本地已剔除目标轮」这一结果，也不该升级成回退失败。
         }
-        return
+        const stillPersistedAfterReload = (persistedMessagesByThreadId.value[threadId] ?? []).some(
+          (message) =>
+            (message.turnId?.trim() ?? '') === beforeTurnId
+            && (message.role === 'user' || message.role === 'assistant'),
+        )
+        if (!stillPersistedAfterReload) return 'reconciled'
+        console.warn(
+          `[rollback] ${threadId}: probe reported turn ${beforeTurnId} as gone, but the forced reload restored it; falling back to thread/revert`,
+        )
       }
 
       const nextMessages = await rollbackThreadWithRevertFallback(threadId, beforeTurnId)
@@ -3529,6 +3557,7 @@ export function useDesktopState() {
       setTurnErrorForThread(threadId, null)
       pendingThreadsRefresh = true
       await syncFromNotifications()
+      return 'reverted'
     } catch (unknownError) {
       const errorMessage = unknownError instanceof Error ? unknownError.message : 'Failed to rollback thread'
       error.value = errorMessage
@@ -3546,6 +3575,7 @@ export function useDesktopState() {
       } catch {
         // 重同步自身的失败不得盖掉原始回退错误。
       }
+      return 'failed'
     } finally {
       isRollingBack.value = false
     }
@@ -4026,6 +4056,9 @@ export function useDesktopState() {
     forkThreadById,
     forkThreadFromTurn,
     rollbackSelectedThread,
+    // round-184：会话内唯一「用户看得见」的失败通道（turn error 行）。编辑保存
+    // 失败必须走它——`error` 在 UI 上没有渲染位，写进去等于什么都没发生。
+    setTurnErrorForThread,
 
     sendMessageToSelectedThread,
     sendMessageToNewThread,

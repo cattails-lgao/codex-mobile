@@ -597,6 +597,8 @@
                   :has-more-persisted-above="hasMoreOlderMessages"
                   :is-loading-persisted-above="isLoadingOlderMessages"
                   :load-earlier-messages="loadOlderMessages"
+                  :edit-saving="editSaving"
+                  :edit-failure="editFailure"
                   @fork-thread="onForkThreadFromMessage"
                   @rollback="onRollback"
                   @edit-message="onEditMessageResend"
@@ -1283,6 +1285,7 @@ const {
   stopPolling,
   primeSelectedThread,
   rollbackSelectedThread,
+  setTurnErrorForThread,
 } = useDesktopState()
 
 const route = useRoute()
@@ -4394,34 +4397,71 @@ function onRollback(payload: { turnId: string }): void {
 }
 
 // 批 4（round-169）：内联编辑保存 = 桌面同款语义「revert 清理链 + 编辑重发」。
-// rollbackSelectedThread 吞错（只 set error），所以用「回退后目标轮仍在列表」判定
-// 失败并不重发——旧轮次还在时重发会产生语义混乱；round-141 本地对齐路径会把目标轮
-// 从列表剔除，重发照常进行。turnTrigger='edit_user_message' 是上游 turn/start 的
-// 发起方分类（schema: string|null，桌面端同款取值）。
+// turnTrigger='edit_user_message' 是上游 turn/start 的发起方分类（schema:
+// string|null，桌面端同款取值）。
+//
+// round-184：这条链路此前失败时**完全静默**，三处漏洞叠在一起：
+//  ① rollbackSelectedThread 有若干静默 return（并发守卫 / 取不到轮次下标）；
+//  ② 失败原因写进 `desktopError`，而该 ref 在 App 模板里**没有任何渲染位**
+//     （grep 模板区 0 处）⇒ 写进去等于什么都没发生；
+//  ③ 保存期间按钮没有进行态，真实回退在慢链路上要数秒。
+// 于是用户看到的就是「点保存没反应」。现在改成：回退返回显式状态 → 失败走会话内
+// turn error 行（唯一有渲染位的通道）+ 重开编辑器并保留已编辑文本；成功才重发。
+const editSaving = ref(false)
+const editFailure = ref('')
+
+function reportEditFailure(message: string): void {
+  editFailure.value = message
+  const threadId = selectedThreadId.value
+  if (threadId) setTurnErrorForThread(threadId, message)
+}
+
 async function onEditMessageResend(payload: { turnId: string; text: string }): Promise<void> {
   const targetTurnId = payload.turnId.trim()
-  if (!selectedThreadId.value || !targetTurnId || payload.text.trim().length === 0) return
-  await rollbackSelectedThread(targetTurnId)
-  // round-177：守卫只认 user/assistant 真实消息——系统合成行（worked 耗时行、
-  // turnError 等）也可能带着目标轮的 turnId（round-65 的耗时存档在 revert 后
-  // 不会清），把合成行算进去会把「回退成功」误判成失败（round-176 的实测复现：
-  // 编辑保存后不重发、只剩两条孤儿「Worked for Xs」行）。
-  const rolledBackTurnStillVisible = filteredMessages.value.some((message) => {
-    if ((message.turnId?.trim() ?? '') !== targetTurnId) return false
-    if (message.role !== 'user' && message.role !== 'assistant') return false
-    const type = normalizeMessageType(message.messageType, message.role)
-    return type !== 'worked' && type !== 'turnActivity.live' && type !== 'turnError.live' && type !== 'agentReasoning.live'
-  })
-  if (rolledBackTurnStillVisible) {
-    // round-176：此前这里静默 return——回退失败（服务端拒绝/缓存脱节等）时用户点
-    // 「保存」毫无反馈、消息原地不动，观感就是「编辑功能坏了」。回退路径自身已在
-    // error 里放了原因；若 error 为空（例如回退被并发守卫吞掉）也要给一条显式提示。
-    desktopError.value = desktopError.value.trim().length > 0
-      ? desktopError.value
-      : t('Edit failed: the original message could not be rolled back. Try again.')
-    return
+  const nextText = payload.text.trim()
+  const threadId = selectedThreadId.value
+  if (!threadId || !targetTurnId || nextText.length === 0) return
+  if (editSaving.value) return
+  editSaving.value = true
+  editFailure.value = ''
+  try {
+    const result = await rollbackSelectedThread(targetTurnId)
+    if (result === 'already-busy') {
+      reportEditFailure(t('Edit failed: another rollback is still running. Try again in a moment.'))
+      return
+    }
+    if (result === 'no-thread' || result === 'no-turn' || result === 'no-persisted') {
+      reportEditFailure(t('Edit failed: this message can no longer be located in the thread. Reopen the thread and try again.'))
+      return
+    }
+    if (result === 'failed') {
+      reportEditFailure(
+        desktopError.value.trim().length > 0
+          ? desktopError.value
+          : t('Edit failed: the original message could not be rolled back. Try again.'),
+      )
+      return
+    }
+    // result 为 reverted / reconciled：回退（或本地对齐）已成立。
+    // round-177：复核只认 user/assistant 真实消息——系统合成行（worked 耗时行、
+    // turnError 等）也可能带着目标轮的 turnId（round-65 的耗时存档在 revert 后
+    // 不会清），把合成行算进去会把「回退成功」误判成失败。
+    const rolledBackTurnStillVisible = filteredMessages.value.some((message) => {
+      if ((message.turnId?.trim() ?? '') !== targetTurnId) return false
+      if (message.role !== 'user' && message.role !== 'assistant') return false
+      const type = normalizeMessageType(message.messageType, message.role)
+      return type !== 'worked' && type !== 'turnActivity.live' && type !== 'turnError.live' && type !== 'agentReasoning.live'
+    })
+    if (rolledBackTurnStillVisible) {
+      // 旧轮次还在时重发会产生语义混乱（同一轮两份用户消息），因此不重发；
+      // 但必须让用户看见为什么——不再写进没有渲染位的 desktopError。
+      reportEditFailure(t('Edit failed: the original message is still in the thread after rolling back. Try again.'))
+      return
+    }
+    await sendMessageToSelectedThread(nextText, [], [], 'steer', [], undefined, undefined, 'edit_user_message')
+  } finally {
+    editSaving.value = false
   }
-  await sendMessageToSelectedThread(payload.text, [], [], 'steer', [], undefined, undefined, 'edit_user_message')
 }
 
 function onImplementPlan(): void {

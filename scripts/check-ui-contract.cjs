@@ -1313,6 +1313,35 @@ check(
   ].join(' / '),
 )
 
+// ------------------------------------------- 编辑保存必须有用户可见的反馈（round-184）
+// 「点保存没反应」的根因是失败只写进 `error`/`desktopError`，而这两个通道在 App 模板
+// 里**没有渲染位**（desktopError 在模板区 grep 为 0）。契约：失败必须走会话内 turn
+// error 行；保存期间按钮进入 disabled 进行态；失败原因就地显示在编辑器内。
+const appSrc184 = fs.readFileSync('src/App.vue', 'utf8')
+const stateSrc184 = fs.readFileSync('src/composables/useDesktopState.ts', 'utf8')
+const editFn184 = (appSrc184.match(/async function onEditMessageResend[\s\S]{0,4000}?\r?\n}\r?\n/) || [''])[0]
+const editReportsVisible184 = /function reportEditFailure\([\s\S]{0,400}?setTurnErrorForThread\(/.test(appSrc184)
+  && /reportEditFailure\(/.test(editFn184)
+const editNoInvisibleChannel184 = !/desktopError\.value\s*=[^=]/.test(appSrc184)
+const editBusyProp184 = /editSaving\?: boolean/.test(convSrc174) && /editFailure\?: string/.test(convSrc174)
+const editBusyButton184 = /:disabled="editSaving"/.test(convSrc174) && /data-message-inline-editor-error/.test(convSrc174)
+const editRollbackStatus184 = /export type ThreadRollbackResult =/.test(stateSrc184)
+  && /if \(!threadId\) return 'no-thread'/.test(stateSrc184)
+  && /return 'reverted'/.test(stateSrc184)
+const editFalseGoneGuard184 = /stillPersistedAfterReload[\s\S]{0,200}?return 'reconciled'/.test(stateSrc184)
+check(
+  '编辑保存失败必须可见：会话内错误行 + 进行态 + 回退显式状态 + 假「已删除」复核（round-184）',
+  editReportsVisible184 && editNoInvisibleChannel184 && editBusyProp184 && editBusyButton184
+    && editRollbackStatus184 && editFalseGoneGuard184,
+  [
+    `失败走 turn error=${editReportsVisible184 ? 'yes' : 'NO'}`,
+    `不再写不可见通道=${editNoInvisibleChannel184 ? 'yes' : 'NO'}`,
+    `进行态 prop/按钮=${editBusyProp184 && editBusyButton184 ? 'yes' : 'NO'}`,
+    `回退显式状态=${editRollbackStatus184 ? 'yes' : 'NO'}`,
+    `假「已删除」复核=${editFalseGoneGuard184 ? 'yes' : 'NO'}`,
+  ].join(' / '),
+)
+
 // --------------------------------------------------------------------- 报告
 console.log('UI 契约检查\n')
 for (const r of results) {

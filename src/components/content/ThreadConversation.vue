@@ -546,14 +546,21 @@
                   <button
                     type="button"
                     class="message-inline-editor-button message-inline-editor-primary"
+                    :disabled="editSaving"
                     @click="confirmInlineEdit"
-                  >{{ t('Save') }}</button>
+                  >{{ editSaving ? t('Saving…') : t('Save') }}</button>
                   <button
                     type="button"
                     class="message-inline-editor-button"
                     @click="cancelInlineEdit"
                   >{{ t('Cancel') }}</button>
                 </div>
+                <p
+                  v-if="inlineEditFailure"
+                  class="message-inline-editor-error"
+                  role="alert"
+                  data-message-inline-editor-error
+                >{{ inlineEditFailure }}</p>
                 <p class="message-inline-editor-note">{{ t('Saving rolls this turn back and resends it with your changes. Later replies will be removed.') }}</p>
               </div>
             </article>
@@ -787,6 +794,11 @@ const props = defineProps<{
   hasMorePersistedAbove?: boolean
   isLoadingPersistedAbove?: boolean
   loadEarlierMessages?: (threadId: string) => Promise<void>
+  // round-184：编辑保存的进行态/失败态由 App 统一持有（回退是它发起的）。
+  // 没有这两个 prop 时，真实回退要数秒、失败又只写进无渲染位的 error
+  // ⇒ 用户看到的就是「点保存没反应」。
+  editSaving?: boolean
+  editFailure?: string
 }>()
 
 const markdownRendering = createMarkdownRendering({
@@ -2017,6 +2029,8 @@ function showEditMessageButton(message: UiMessage): boolean {
 // 保存即重发」（桌面同款语义：revert 清理链 + turn/start 带 turnTrigger='edit_user_message'，
 // 由 App.vue 的 onEditMessage 编排）。同一时刻最多一条消息处于编辑态。
 const editingMessage = ref<{ messageId: string; turnId: string; text: string } | null>(null)
+// round-184：最近一次提交保存的编辑内容（用于失败后保留输入、并判定失败提示归属）。
+const pendingEdit = ref<{ messageId: string; turnId: string; text: string } | null>(null)
 const inlineEditorTextareaRef = ref<HTMLTextAreaElement | null>(null)
 
 function setInlineEditorTextareaRef(el: unknown): void {
@@ -2046,16 +2060,44 @@ function editMessage(messageId: string): void {
 
 function cancelInlineEdit(): void {
   editingMessage.value = null
+  pendingEdit.value = null
 }
 
 function confirmInlineEdit(): void {
   const editing = editingMessage.value
-  editingMessage.value = null
   if (!editing) return
   const text = editing.text.trim()
-  if (!text || text === props.messages.find((item) => item.id === editing.messageId)?.text.trim()) return
+  const originalText = props.messages.find((item) => item.id === editing.messageId)?.text.trim() ?? ''
+  if (!text || text === originalText) {
+    // 内容没变：等同取消，不发回退。
+    editingMessage.value = null
+    pendingEdit.value = null
+    return
+  }
+  // round-184：保存期间**不关闭**编辑器——回退可能要数秒，旧实现先清空编辑器再等
+  // 结果，失败时编辑器已经消失、输入内容也丢了，观感就是「点了保存没反应」。
+  pendingEdit.value = { messageId: editing.messageId, turnId: editing.turnId, text: editing.text }
   emit('editMessage', { turnId: editing.turnId, text })
 }
+
+// round-184：一次保存结束时按结果收尾。成功 ⇒ 关闭编辑器（该轮已被回退重发）；
+// 失败 ⇒ 保持打开并把原因显示在编辑器内（App 另会补一条会话内 turn error 行）。
+watch(
+  () => props.editSaving === true,
+  (saving, wasSaving) => {
+    if (!wasSaving || saving) return
+    if (props.editFailure) return
+    editingMessage.value = null
+    pendingEdit.value = null
+  },
+)
+
+// 失败信息只对「刚提交的那条消息」生效，避免串到别的消息的编辑器上。
+const inlineEditFailure = computed(() =>
+  editingMessage.value && pendingEdit.value && editingMessage.value.messageId === pendingEdit.value.messageId
+    ? (props.editFailure ?? '')
+    : '',
+)
 
 function requestFileChangeAction(summary: TurnFileChangeSummary | null, action: 'undo' | 'redo'): void {
   if (!fileChangeActionKey(summary)) return
@@ -3429,6 +3471,16 @@ onBeforeUnmount(() => {
 
 .message-inline-editor-primary {
   @apply border-transparent bg-s-inv text-ink-inv shadow-sm hover:bg-s-inv-soft hover:text-ink-inv;
+}
+
+/* round-184：保存进行态——真实回退可能数秒，按钮必须显式「进行中」，否则观感是没反应。 */
+.message-inline-editor-button:disabled {
+  @apply cursor-progress opacity-60;
+}
+
+/* round-184：保存失败的原因就地展示（此前只写进无渲染位的 error，用户完全看不见）。 */
+.message-inline-editor-error {
+  @apply rounded-md bg-alert/10 px-2.5 py-1.5 text-micro leading-snug text-alert;
 }
 
 .message-inline-editor-note {

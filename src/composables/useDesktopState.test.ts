@@ -3329,3 +3329,117 @@ describe('rollbackSelectedThread clears the thinking archive of removed turns', 
     expect(state.messages.value.some((message) => message.messageType === 'reasoning')).toBe(false)
   })
 })
+
+// round-184：编辑保存「点了没反应」的根因收口 —— 回退必须给出显式状态，且
+// 「服务端已删」的判据不能只信 thread/turns/list：0.162.1 在**读不到 rollout** 时
+// 也回「0 轮 + nextCursor 空」，被当成「已删除」后走本地对齐，强制重读又把轮次
+// 装回来，调用方于是既不重发也不给提示（App 侧只写进无渲染位的 error）。
+describe('rollbackSelectedThread returns an explicit status (round-184)', () => {
+  function buildDetail(includeFirstTurn: boolean) {
+    const messages = [
+      ...(includeFirstTurn
+        ? [{
+          id: 'user-1',
+          role: 'user',
+          text: 'do the thing',
+          messageType: 'userMessage',
+          turnId: 'turn-1',
+          turnIndex: 0,
+        }]
+        : []),
+      {
+        id: 'agent-2',
+        role: 'assistant',
+        text: 'done',
+        messageType: 'agentMessage',
+        turnId: 'turn-2',
+        turnIndex: 1,
+      },
+    ]
+    return {
+      messages,
+      inProgress: false,
+      activeTurnId: '',
+      turnIndexByTurnId: includeFirstTurn ? { 'turn-1': 0, 'turn-2': 1 } : { 'turn-2': 1 },
+      hasMoreOlder: false,
+    }
+  }
+
+  function installHarness(threadId: string) {
+    installTestWindow()
+    gatewayMocks.subscribeCodexNotifications.mockImplementation(() => vi.fn())
+    gatewayMocks.getPendingServerRequests.mockResolvedValue([])
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({ groups: [], nextCursor: null })
+    gatewayMocks.getThreadDetail.mockResolvedValue(buildDetail(true))
+    gatewayMocks.interruptThreadTurn.mockResolvedValue(null)
+    gatewayMocks.resumeThread.mockResolvedValue(null)
+    gatewayMocks.revertThread.mockResolvedValue(buildDetail(false).messages)
+    const state = useDesktopState()
+    state.primeSelectedThread(threadId)
+    return state
+  }
+
+  it('returns "reverted" on the happy path', async () => {
+    const state = installHarness('thread-r184-ok')
+    await state.loadMessages('thread-r184-ok')
+
+    await expect(state.rollbackSelectedThread('turn-1')).resolves.toBe('reverted')
+    expect(gatewayMocks.revertThread).toHaveBeenCalledWith('thread-r184-ok', 'turn-1')
+  })
+
+  it('returns "failed" when thread/revert throws', async () => {
+    const state = installHarness('thread-r184-fail')
+    await state.loadMessages('thread-r184-fail')
+    gatewayMocks.revertThread.mockRejectedValue(new Error('boom'))
+
+    await expect(state.rollbackSelectedThread('turn-1')).resolves.toBe('failed')
+  })
+
+  it('returns "no-thread" without a selected thread', async () => {
+    installTestWindow()
+    const state = useDesktopState()
+    await expect(state.rollbackSelectedThread('turn-1')).resolves.toBe('no-thread')
+  })
+
+  it('returns "no-persisted" when no persisted turn carries an index', async () => {
+    installTestWindow()
+    gatewayMocks.subscribeCodexNotifications.mockImplementation(() => vi.fn())
+    gatewayMocks.getPendingServerRequests.mockResolvedValue([])
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({ groups: [], nextCursor: null })
+    gatewayMocks.getThreadDetail.mockResolvedValue({
+      messages: [{ id: 'user-x', role: 'user', text: 'no index', messageType: 'userMessage', turnId: 'turn-x' }],
+      inProgress: false,
+      activeTurnId: '',
+      turnIndexByTurnId: {},
+      hasMoreOlder: false,
+    })
+    const state = useDesktopState()
+    state.primeSelectedThread('thread-r184-noindex')
+    await state.loadMessages('thread-r184-noindex')
+
+    await expect(state.rollbackSelectedThread('turn-x')).resolves.toBe('no-persisted')
+  })
+
+  // 回归：探针回「complete 且 0 轮」被旧代码当成「服务端已删」，随后强制重读又把
+  // 轮次装回来 —— 旧实现此时直接 return，编辑保存静默失败。现在必须落到真实 revert。
+  it('falls through to thread/revert when the "gone" probe is contradicted by the forced reload', async () => {
+    const state = installHarness('thread-r184-falsegone')
+    await state.loadMessages('thread-r184-falsegone')
+    gatewayMocks.listThreadTurnIdPage.mockResolvedValue({ turnIds: [], complete: true })
+    // 强制重读仍然能看到 turn-1 ⇒ 探针的「已删除」结论不成立
+    gatewayMocks.getThreadDetail.mockResolvedValue(buildDetail(true))
+
+    await expect(state.rollbackSelectedThread('turn-1')).resolves.toBe('reverted')
+    expect(gatewayMocks.revertThread).toHaveBeenCalledWith('thread-r184-falsegone', 'turn-1')
+  })
+
+  it('reports "reconciled" (and skips thread/revert) when the turn really is gone', async () => {
+    const state = installHarness('thread-r184-reallygone')
+    await state.loadMessages('thread-r184-reallygone')
+    gatewayMocks.listThreadTurnIdPage.mockResolvedValue({ turnIds: ['turn-2'], complete: true })
+    gatewayMocks.getThreadDetail.mockResolvedValue(buildDetail(false))
+
+    await expect(state.rollbackSelectedThread('turn-1')).resolves.toBe('reconciled')
+    expect(gatewayMocks.revertThread).not.toHaveBeenCalled()
+  })
+})
