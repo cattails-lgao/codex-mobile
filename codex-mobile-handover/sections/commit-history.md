@@ -1402,3 +1402,33 @@ B vs C 是对照组：同一负载、同一构建、**唯一变量是判定模�
 **诚实边界**：本机（Windows）空载 `frozen=8–11ms`，**复现不了 round-119 的真实假红**，载态只能合成（且合成的是均匀变慢、与真实载机器的突发式停顿不同构）；归一化必然降低载机器上的灵敏度（`2×ambient` 以内的停顿无法与调度抖动区分），空载不受影响；ambient 只在点击前 700ms 窗口内采样，窗口内无停顿而点击瞬间来停顿仍可能误红（概率性残留）；过载跳过是「静默放行」，本仓无 CI 接线（只有 `.github/workflows/build-apk.yml`，不跑这些闸门）；未在 0.160.1 上复测。
 
 **未发布**：未 bump 版本、未 tag；`ce8e7d75` 待在本地 `main`（round-122 ~ round-129 随下一次发布走，npm `latest` 仍是 `0.1.127`）。
+---
+
+## round-184 · 编辑保存「点了没反应」收口（2026-10-22）
+
+**报障**：点击编辑用户消息 → 再点保存 → 界面毫无反应。
+
+**诊断**（三类证据，强度递减但结论一致）：
+
+1. 合成全链路探针（`tmp/r184-edit-probe.cjs`，真 Edge headless + 有状态合成 app-server）**A1–A6 全 PASS**
+   —— `thread/revert {beforeTurnId: turn-0}` 发出、`turn/start {turnTrigger:'edit_user_message'}` 发出、
+   编辑后的文本上屏 ⇒ **正常路径没坏**，问题只在失败分支。
+2. 静态可查：`desktopError`（= `useDesktopState` 的 `error`）在 `src/App.vue` **模板区 grep 0 处**
+   —— round-176 把「回退失败」提示写进这里，实际用户永远看不到。
+3. 真 0.162.1 实测（`tmp/r184-revert-real.cjs`，隔离 home）：`thread/turns/list` 对**读不到 rollout** 的线程
+   回 `count=0, nextCursor=null`（**不报错**）⇒ `isTargetTurnMissingOnServer` 判 `true` ⇒ 走本地对齐 ⇒
+   强制重读把轮次装回来 ⇒ 调用方守卫成立 ⇒ 既不重发也不提示。
+
+**改动**：`rollbackSelectedThread` 返回 `ThreadRollbackResult`（7 值）+ 对外暴露 `setTurnErrorForThread`；
+本地对齐后复核、被推翻则 fall-through 发真 `thread/revert`；`App.vue` 新增 `editSaving` / `editFailure` 与
+`reportEditFailure()`（写 turn error 行，不再写 `desktopError`）；`ThreadConversation.vue` 保存期间不关编辑器、
+按钮 `disabled` + `Saving…`、失败行内 `role=alert` 展示。
+
+**验证**：`vue-tsc` EXIT=0 · 全量 **1095/1095（99 文件）**（+6 例）· `vite build` EXIT=0（13.28s）·
+UI 契约 **61/61**（+1 条）· 失败路径探针（revert 500 + 1.2s 延迟）B1–B5 全 PASS。
+
+**提交**：`ef8f714c`（代码 + 闸门）+ 本段所在提交（文档）。
+
+**诚实边界**：用户那次现场未复现；「读不到 rollout ⇒ 0 轮」的实测对象是合成 rollout；隔离 home 不被索引
+（手工 rollout 跑不了真实 revert）；失败提示为英文字面量。详见 [round-184](../rounds/round-184-edit-save-feedback.md)。
+
