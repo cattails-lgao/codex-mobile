@@ -1502,3 +1502,44 @@ UI 契约 61/61 · 脱敏 0 · md-links 0 · 派生 doc 0 · `check-session-log-
 （只能刷新，加轮询不值当）；列表对账只清不置 ⇒ 另一端刚起一轮时本端左侧不会立刻亮起；线上需重新部署才生效。
 详见 [round-186](../rounds/round-186-stuck-thinking-reconcile.md)。
 
+
+## v0.1.137 发布 · round-183/184/185/186 四轮合并（2026-10-26；tag / Release 已发，npm 待维护者上架）
+
+**起因**：round-185 §六① 留下的交付缺口 —— 为验证修复，round-185 的 `dist/` 与 `dist-cli/` 直接覆盖了服务器的
+`codex-mobile-re@0.1.136` 包目录，`package.json` 仍是 `0.1.136` ⇒ `--version` 与实际代码不符。0.1.137 把
+`v0.1.136` 之后的全部代码提交（round-183~186，共 5 个代码提交）一次发出去。
+
+**发版前闸门（本机实测 2026-10-26 12:21–12:24）**：`vue-tsc --noEmit` 0 · 全量单测 **1113/1113（101 文件）** ·
+`vite build` 0 · `tsup` 0 · UI 契约 **61/61** · `check-session-log-memory` 61 个服务端源文件 **0 处整读**（4 处显式例外）。
+
+**产物核对（只认字符串，不认构建日志）**：`dist-cli/index.js` 含 `attachWebSocketHeartbeat`×2（r183）+
+`createReadStream`×9（r185）；前端 `dist/assets/index-*.js` 含 `reconcileInProgressFromThreadGroups`（r186）；
+`dist/sw.js` 的 `CACHE_NAME = codexweb-shell-9c9a8893c4`（r183 构建期指纹注入生效）。`dist-cli` 内不含版本串属正常
+—— 版本号来自运行时读 `package.json`（`src/cli/index.ts:53`）。
+
+**已落地**：bump `e0468d80`（仅 `package.json` 一行）→ annotated tag `v0.1.137`（对象 `bd4d18a6`）→ Release
+**Latest** `createdAt` **`2026-10-26T04:24:33Z`**（北京 12:24:33），`/releases/latest` 已回读为 `v0.1.137`；
+main 与 tag 均**直连**推送成功。包 `--dry-run`：**1.59MB packed / 4.99MB unpacked**，shasum
+`6026ad2f9160f7e171c12d6de41dd86f676ae116`（与 0.1.136 的 1.7MB / 5.2MB / 54 文件同量级）。
+
+**未落地（卡在凭据，转维护者执行）**：`npm stage publish` 报 `E401`，实测**两枚现存 token 都失效** ——
+pnpm `auth.ini`（发 0.1.136 时用的那枚）与 `~/.npmrc` 里的另一枚（sha256 不同），直接用 Bearer 打
+`/-/whoami` 均回 `401 {}`；`NPM_TOKEN`/`NODE_AUTH_TOKEN` 未设置、`~/.yarnrc` 无 `npmAuthToken`、
+`%APPDATA%\npm\etc\npmrc` 不存在，已排除第三处来源。npm 侧现提示 *tokens that bypass 2FA are being restricted*，
+而 0.1.136 用的正是免 2FA token，很可能被这轮策略收掉。
+
+⚠️ **两个坑（下次发版先看这两条）**：
+
+1. `~/.npmrc` 的 `registry` 指向 `https://registry.npmmirror.com/` ⇒ 直接 `npm publish` 会往**镜像**发；
+   必须显式 `--registry=https://registry.npmjs.org/`，`npm login` 同样要带（否则登录态写到镜像的 key 下）。
+2. token 失效是静默的：`npm whoami` 只给一行 `E401`，不说是哪枚。先用 Bearer 单点打 `/-/whoami` 验，
+   别在 `publish` 里试错 —— 失败一次就多一次 `E409` / 孤儿暂存记录的风险（0.1.135 的坑就是这么来的）。
+
+**上架后必做的三项核对**（别信 `npm publish` 的成功横幅，那是开始提示）：① `curl -sI
+https://registry.npmjs.org/codex-mobile-re` 看 `Last-Modified` + `Age`（`Age` 小＝新鲜副本、`Last-Modified` 未变＝
+源站从未被写）；② `npm view codex-mobile-re dist-tags.latest` 应为 `0.1.137`；③ 下载 tarball 复算 sha1 与
+`6026ad2f…` 逐位对齐。
+
+**待回填**：npm 上架时刻与最终 shasum、线上重部署时间、round-183 §四-2 剩下的「线上端点心跳核验」读数。
+
+详见 [round-186 §八](../rounds/round-186-stuck-thinking-reconcile.md)。

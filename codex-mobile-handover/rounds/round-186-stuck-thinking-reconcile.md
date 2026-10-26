@@ -163,3 +163,56 @@ round-186 describe 内的 6 例：idle 收口 / `active` 不误清 / 列表快�
 
 - 代码 + 单测：`src/composables/useDesktopState.ts`、`src/composables/useDesktopThreadListLoading.ts`、`src/composables/useDesktopState.test.ts`（见 `sections/commit-history.md` 的 round-186 段）
 - 文档（本文件 + 总入口 + 台账）：`docs(handover): round-186 …`
+
+## 八、发版：0.1.137（tag / Release 已发，npm 上架由维护者执行）
+
+**起因**是 round-185 §六① 留下的交付缺口：线上包 `package.json` 仍是 `0.1.136`，而目录里的 `dist/` 是 round-185 的构建 ⇒ `--version` 与实际代码不符。0.1.137 把 **round-183~186 四轮**一次发出去（范围 `v0.1.136..e0468d80`，5 个代码提交）。
+
+### 8.1 发版前闸门与产物核对（本机实测，2026-10-26 12:21–12:24）
+
+| 项 | 结果 |
+| --- | --- |
+| `vue-tsc --noEmit` | 0 |
+| 全量单测 | **1113 / 1113（101 文件）** |
+| `vite build` / `tsup` | 0 / 0 |
+| UI 契约 | **61 / 61** |
+| `check-session-log-memory` | 61 个服务端源文件，**0 处整读**，4 处显式例外 |
+
+产物代码核对（**不信构建日志，只信产物里的字符串**）：`dist-cli/index.js` 含 `attachWebSocketHeartbeat` ×2（r183）+ `createReadStream` ×9（r185）；前端 `dist/assets/index-*.js` 含 `reconcileInProgressFromThreadGroups`（r186）；`dist/sw.js` 的 `CACHE_NAME = codexweb-shell-9c9a8893c4`（r183 指纹注入生效）。`dist-cli` 的版本号来自运行时读 `package.json`（`src/cli/index.ts:53`），故产物内不含版本串，属正常。
+
+### 8.2 已落地的两步
+
+- **bump** `e0468d80 chore(release): 0.1.137`（仅 `package.json` 一行），已推送
+- **annotated tag** `v0.1.137` → 对象 `bd4d18a6`，已推送，`ls-remote` 与本地一致
+- **Release** `v0.1.137 — 网络稳定性 + 桥层内存根治 + 结束仍 thinking 修复`，`--latest`，`createdAt` **`2026-10-26T04:24:33Z`**（北京 12:24:33），`/releases/latest` 已回读为 `v0.1.137`
+- 包内容（`npm pack --dry-run`）：**1.59MB packed / 4.99MB unpacked**，shasum `6026ad2f9160f7e171c12d6de41dd86f676ae116`（与 0.1.136 的 1.7MB/5.2MB 同量级）
+
+### 8.3 npm 这一步卡在凭据，转由维护者执行
+
+`npm stage publish` 走不通，**两条现存 token 都是 401**（不是 2FA 问题，是凭据本身被拒）：
+
+| 来源 | 直接打 `/-/whoami` |
+| --- | --- |
+| pnpm `auth.ini`（发 0.1.136 时用的那枚） | **401 Unauthorized** |
+| `~/.npmrc` 里的另一枚（sha256 不同，非同枚） | **401 Unauthorized** |
+
+也排除了第三处：`NPM_TOKEN` / `NODE_AUTH_TOKEN` 未设置、`~/.yarnrc` 无 `npmAuthToken`、`%APPDATA%\npm\etc\npmrc` 不存在。npm 现在会提示 *tokens that bypass 2FA are being restricted* —— 0.1.136 用的正是免 2FA token，很可能被这轮策略收掉。
+
+⚠️ **两个坑，下次发版先看这两条**：
+
+1. **`~/.npmrc` 的 `registry` 指向 `https://registry.npmmirror.com/`** ⇒ 直接 `npm publish` 会往**镜像**发。必须显式 `--registry=https://registry.npmjs.org/`；`npm login` 同样要带（否则登录态写到镜像的 key 下，npmjs 侧仍是旧 token）。
+2. **token 失效是静默的**：`npm whoami` 只给一行 `E401`，不告诉你哪枚、为什么。先 `curl -H "Authorization: Bearer <token>" https://registry.npmjs.org/-/whoami` 单点验，别在 `publish` 里试错（失败一次就是一次 `E409`/孤儿暂存的风险）。
+
+### 8.4 上架后必做的三项核对
+
+别信 `npm publish` 的成功横幅（那是**开始**提示），按这个顺序验：
+
+1. `curl -sI https://registry.npmjs.org/codex-mobile-re` 看 `Last-Modified` + `Age` —— `Age` 小＝新鲜副本、`Last-Modified` 没变＝源站从未被写；
+2. `npm view codex-mobile-re dist-tags.latest` 应为 `0.1.137`；
+3. 下载 tarball 复算 sha1，与 `6026ad2f…` 对齐（0.1.136 就是这么验的，逐位一致才算闭环）。
+
+### 8.5 诚实边界
+
+1. **本文件记录的是中间态**：tag 与 Release 已发，**npm 尚未上架**，上架时刻与最终 shasum 待维护者操作后回填。
+2. **线上仍是 round-185 的构建**，0.1.137 要重新部署才生效；round-183 §四-2 剩下的「线上端点心跳核验」也要等这次部署。
+3. `SHARED_BRIDGE_VERSION` 仍是 `experimental-api-v7`（`git log -S` 核实 `v0.1.136..HEAD` 未动过）⇒ 与桌面端内置桥的兼容约定没破。
