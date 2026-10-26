@@ -1471,3 +1471,32 @@ UI 契约 61/61 · 脱敏 0 · md-links 0 · 派生 doc 0 · `check-session-log-
 `streamEventsByThreadId` 仍「每线程 400 帧、线程数无界」；`turns/list` 的单发大页能力仍在（只改了本仓 revert 路径）；
 快照 LRU 无单测（需真实子进程）。详见 [round-185](../rounds/round-185-session-log-streaming.md)。
 
+## round-186 · 线上「明明结束了还在 thinking」—— 丢失通知的对账补偿（2026-10-26）
+
+**用户口径**：「最近在线上使用期间偶尔出现，明明已经结束了但是还在 thinking」，随后补充**「刷新后就正常了」**。
+
+**定性**：刷新即恢复 ⇒ 服务端对这一轮的判定是 `idle` ⇒ 排除「僵尸 turn」「索引写坏」，缺口只在客户端内存态。
+刷新能修的确切机制＝重新 `loadMessages` 用 `detail.inProgress` 覆盖本地值（`useDesktopMessageHistoryLoading.ts:297`）；
+而同一会话内 `canReuseLoadedMessages`（同文件 `160` 行）在「刚加载过」时直接复用、**根本不重发 `thread/read`** ⇒ 没有任何对账机会。
+
+**根因**：`inProgressById` 纯事件驱动，只有 `turn/completed` 能清；该 WS 通知落在断线窗口即永久丢失（round-183 之前
+`/codex-api/ws` 每 120s 被中间层掐断，一轮跑几分钟 ⇒ 概率就是「偶尔」）。三条本可补偿的通道当时全被浪费：
+① `thread/status/changed` 的 `params.status.type` 就是 `idle`，却只拿它触发列表刷新、状态值被丢弃；
+② 线程列表带着服务端真相 `UiThread.inProgress`（`normalizers/v2.ts readThreadInProgress` 多路归一化），而
+`applyThreadFlags` 只信本地表；③ `ready` 时的 `recoverBridgeState` 只在「列表还没加载过」时重取。
+
+**改动**（3 文件 +229/−2）：`thread/status/changed` 的 `idle`/`systemError` 直接 `finishTurnForThread`（`active` 有意不置位
+——缺 `activeTurnId` 时中断按钮拿不到轮次）；新增 `reconcileInProgressFromThreadGroups(groups, snapshotStartedAt)`，
+在首屏与背景分页两处列表落地后**只清不置**地对账；新增 `inProgressStartedAtById` + 「快照**发出**时刻」卡住
+「快照早于本轮开始」的误杀竞态；`ready` 时若有线程像在跑 ⇒ `pendingThreadsRefreshForce = true` 重取列表（绕开 2s 复用窗口）。
+
+**验证**：`vue-tsc --noEmit` 0 · 全量单测 **1113/1113（101 文件，+6 例）** · `vite build` 0 · UI 契约 61/61。
+四条守卫均反跑（关掉 idle 收口 / 去掉时间戳守卫 / 还原 `ready` 省流量语义 / 只断「用服务端值清 true」分支），各自对应用例变红；
+最后一条的失败输出正是 `{ activityLabel: 'Thinking' } to be null`，与用户现象同形。
+
+**提交**：`4806ca07`（代码 + 单测）+ 本段所在提交（文档）。
+
+**诚实边界**：用户那次现场未复现（修的是可证的机制缺口）；socket 活着但两条通知同时丢、且列表不再刷新时仍兜不住
+（只能刷新，加轮询不值当）；列表对账只清不置 ⇒ 另一端刚起一轮时本端左侧不会立刻亮起；线上需重新部署才生效。
+详见 [round-186](../rounds/round-186-stuck-thinking-reconcile.md)。
+
