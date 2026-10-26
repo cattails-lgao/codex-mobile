@@ -470,8 +470,10 @@
 
 **诚实边界**：用户那次红条本身未复现（清缓存自愈只能指向客户端陈旧状态，不能证明就是 SW）；「心跳能骗过 nginx 120s」已用 30s 空闲阈值的等价代理证明机制成立（零流量 30.0s 被切 / 带心跳存活 100s），但**等价装置 ≠ 线上 nginx**，仍须重部署后复测；12s 只改阈值、慢响应成功未做端到端复现；`addAll` 失败会在 `caches.keys()` 留下**空缓存目录**（条目数 0，`activate` 只在成功接管时清理）；`provider-models` 失败仍对用户不可见（`error` 通道无 UI 渲染位）。
 
-**补记（同一 round 的验证补齐，不新开 round）**：三条先前登记为「未验证」的边界，改用**等价装置**在本机验证：① 造 30s 空闲读超时的 TCP 代理（`proxy_read_timeout` 语义）⇒ 零流量连接 30.0s 被切 `code=1006`、带心跳连接存活 100s（3 次 ping），机制成立且对线上 120s 有 4.8 倍余量；② 三个 origin 的 SW 对照（`legacy` / `legacy-bumped` / `stamped`）⇒ 「字节不变就不更新」与「`addAll` 一处失败即装不上（该缓存**条目数 0**）」均被复现，正式实现照常接管并清旧缓存；③ 删掉注入点后重建 ⇒ 退 **1** 并命中「BUILD_ID 未被注入」，恢复后重建退 **0**。另修注入实现：幂等分支由**全局替换 `codexweb-shell-*`** 改为**锚定 `const BUILD_ID = ...` 行**（原写法会把注释里的旧名改掉，产物注释自相矛盾），`assert` 同步收紧为校验该行取值。脚本：`tmp/r183b-idle-proxy.cjs` · `tmp/r183c-sw-redeploy.cjs` · `tmp/r183d-assert-negative.cjs`。**仍未验证**：线上 nginx 的真实行为（须等重部署）、12s 阈值下的慢响应成功端到端。
+**补记（同一 round 的验证补齐，不新开 round）**：三条先前登记为「未验证」的边界，改用**等价装置**在本机验证：① 造 30s 空闲读超时的 TCP 代理（`proxy_read_timeout` 语义）⇒ 零流量连接 30.0s 被切 `code=1006`、带心跳连接存活 100s（3 次 ping），机制成立且对线上 120s 有 4.8 倍余量；② 三个 origin 的 SW 对照（`legacy` / `legacy-bumped` / `stamped`）⇒ 「字节不变就不更新」与「`addAll` 一处失败即装不上（该缓存**条目数 0**）」均被复现，正式实现照常接管并清旧缓存；③ 删掉注入点后重建 ⇒ 退 **1** 并命中「BUILD_ID 未被注入」，恢复后重建退 **0**。另修注入实现：幂等分支由**全局替换 `codexweb-shell-*`** 改为**锚定 `const BUILD_ID = ...` 行**（原写法会把注释里的旧名改掉，产物注释自相矛盾），`assert` 同步收紧为校验该行取值。脚本：`tmp/r183b-idle-proxy.cjs` · `tmp/r183c-sw-redeploy.cjs` · `tmp/r183d-assert-negative.cjs`。**线上 nginx 已用本机真件闭环（见下方补记 2）**；仍留：12s 阈值下的慢响应成功端到端。
 
+
+**补记 2（2026-10-26，闭环 nginx 复测）**：本机装有 **nginx 1.28.1**（此前记「本机没有 nginx」是 PATH 未命中）。改用真 nginx + `proxy_read_timeout 120s` 复测：带心跳连接存活 **304.8s**（12 次 ping / 平均间隔 25.0s）未被断，零流量对照组精确 **120.0s** 被断 `code=1006` ⇒ 机制在真件上成立，余量 2.5 倍。**第一次跑 FAIL 的原因值得留档**：`dist-cli/index.js` 仍是 0.1.136 的构建（`2026-10-19 17:23`），不含 `0515792e` 之后才进 main 的心跳 ⇒ 主实验与对照组同时在 `120.3s` 断、ping 帧 **0** 个；`pnpm run build:cli` 重建后才 PASS —— **验桥行为前先 `grep attachWebSocketHeartbeat dist-cli/index.js` 确认产物含目标代码**，否则「产物落后」会伪装成「修复无效」。脚本 `tmp/r186b-nginx-ws-idle.cjs`。仅剩线上端点部署后的环境核验（不再是机制未知）。
 详见 [round-183](../rounds/round-183-network-red-rows-sw-ws-heartbeat.md)。
 
 ## v0.1.136 发布（round-176 ~ round-179；0.1.135 版本槽被 npm 遗留暂存记录占用 ⇒ 换号发布，**已批准上架**）
@@ -1490,7 +1492,7 @@ UI 契约 61/61 · 脱敏 0 · md-links 0 · 派生 doc 0 · `check-session-log-
 在首屏与背景分页两处列表落地后**只清不置**地对账；新增 `inProgressStartedAtById` + 「快照**发出**时刻」卡住
 「快照早于本轮开始」的误杀竞态；`ready` 时若有线程像在跑 ⇒ `pendingThreadsRefreshForce = true` 重取列表（绕开 2s 复用窗口）。
 
-**验证**：`vue-tsc --noEmit` 0 · 全量单测 **1113/1113（101 文件，+6 例）** · `vite build` 0 · UI 契约 61/61。
+**验证**：`vue-tsc --noEmit` 0 · 全量单测 **1113/1113（101 文件，+6 例）** · `vite build` 0 · UI 契约 61/61。另附带闭环 round-183 的「心跳 vs nginx 120s」边界（真 nginx 1.28.1：带心跳存活 **304.8s**、零流量对照 **120.0s** 被断）。
 四条守卫均反跑（关掉 idle 收口 / 去掉时间戳守卫 / 还原 `ready` 省流量语义 / 只断「用服务端值清 true」分支），各自对应用例变红；
 最后一条的失败输出正是 `{ activityLabel: 'Thinking' } to be null`，与用户现象同形。
 

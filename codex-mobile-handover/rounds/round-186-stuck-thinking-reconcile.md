@@ -135,6 +135,21 @@ AssertionError: expected { activityLabel: 'Thinking', …(3) } to be null
 
 round-186 describe 内的 6 例：idle 收口 / `active` 不误清 / 列表快照对账 / 快照早于本轮开始的守卫 / 重连强制重取 / 刷新自愈路径。
 
+### 5.1 附带闭环：round-183 的「心跳能否骗过 nginx 的 120s」
+
+本轮顺手把 [round-183](round-183-network-red-rows-sw-ws-heartbeat.md) §四-2 的那条边界闭掉了 —— **本机其实装了 nginx 1.28.1**，此前记「没有 nginx」是 PATH 未命中。
+
+装置：真 nginx + `proxy_read_timeout 120s`，`8088 → 桥(4197，含 25s 心跳)`、`8089 → 裸 ws(4198，零帧)`（对照组是装置自检）。
+
+| 组 | 结果 |
+|---|---|
+| 主实验（经 nginx + 心跳） | 存活 **304.8s** 未断，ping 12 次 / 平均间隔 **25.0s** |
+| 对照组（经 nginx，零流量） | 精确在 **120.0s** 被断 `code=1006`（无 close 帧，与线上同形） |
+
+⇒ 机制在真件上成立，对 120s 有 **2.5 倍**余量。脚本 `tmp/r186b-nginx-ws-idle.cjs`，细节见 round-183 §3.3b。
+
+⚠️ **第一次跑是 FAIL，且极具迷惑性**：`dist-cli/index.js` 还是 0.1.136 的旧构建（`2026-10-19 17:23`），**不含心跳代码** ⇒ 主实验与对照组同在 `120.3s` 断、ping 帧 **0** 个，看上去就像「心跳修复无效」。`pnpm run build:cli` 重建后才是 PASS。**教训：验桥行为前先确认产物含目标代码**（`grep attachWebSocketHeartbeat dist-cli/index.js`）。
+
 ## 六、诚实边界
 
 1. **没有复现用户那一次现场**。修的是**可证的机制缺口**（`turn/completed` 丢失后无任何补偿路径），不是抓住了现场。之所以敢改，是因为「刷新必好」把「服务端状态正确」证死了 —— 缺口只可能在客户端。
