@@ -1522,7 +1522,7 @@ UI 契约 61/61 · 脱敏 0 · md-links 0 · 派生 doc 0 · `check-session-log-
 main 与 tag 均**直连**推送成功。包 `--dry-run`：**1.59MB packed / 4.99MB unpacked**，shasum
 `6026ad2f9160f7e171c12d6de41dd86f676ae116`（与 0.1.136 的 1.7MB / 5.2MB / 54 文件同量级）。
 
-**未落地（卡在凭据，转维护者执行）**：`npm stage publish` 报 `E401`，实测**两枚现存 token 都失效** ——
+**npm 上架：先卡凭据，当日已成**。`npm stage publish` 报 `E401`，实测**两枚现存 token 都失效** ——
 pnpm `auth.ini`（发 0.1.136 时用的那枚）与 `~/.npmrc` 里的另一枚（sha256 不同），直接用 Bearer 打
 `/-/whoami` 均回 `401 {}`；`NPM_TOKEN`/`NODE_AUTH_TOKEN` 未设置、`~/.yarnrc` 无 `npmAuthToken`、
 `%APPDATA%\npm\etc\npmrc` 不存在，已排除第三处来源。npm 侧现提示 *tokens that bypass 2FA are being restricted*，
@@ -1535,11 +1535,29 @@ pnpm `auth.ini`（发 0.1.136 时用的那枚）与 `~/.npmrc` 里的另一枚�
 2. token 失效是静默的：`npm whoami` 只给一行 `E401`，不说是哪枚。先用 Bearer 单点打 `/-/whoami` 验，
    别在 `publish` 里试错 —— 失败一次就多一次 `E409` / 孤儿暂存记录的风险（0.1.135 的坑就是这么来的）。
 
-**上架后必做的三项核对**（别信 `npm publish` 的成功横幅，那是开始提示）：① `curl -sI
-https://registry.npmjs.org/codex-mobile-re` 看 `Last-Modified` + `Age`（`Age` 小＝新鲜副本、`Last-Modified` 未变＝
-源站从未被写）；② `npm view codex-mobile-re dist-tags.latest` 应为 `0.1.137`；③ 下载 tarball 复算 sha1 与
-`6026ad2f…` 逐位对齐。
+**上架结果（维护者本机 `npm login --registry=…` 后直接 `npm publish`）**：上架时刻 **`2026-10-26T06:46:35.080Z`**
+（北京 14:46:35），`dist-tags.latest` ＝ **`0.1.137`**，shasum **`fac7e79ea71294ff30d22ac250ad8ede0d309aba`**，
+54 文件 / unpacked **5,235,296 B** / 发布者 `lgao7779`。
 
-**待回填**：npm 上架时刻与最终 shasum、线上重部署时间、round-183 §四-2 剩下的「线上端点心跳核验」读数。
+**内容级核对（不只看哈希）**：解包后与本地验过的产物**逐文件比 54 个，53 个 sha1 完全相同**；唯一差异是
+`package.json` 被 npm 发布期重写（去掉 `packageManager` / `prepublishOnly`、重新缩进，2575→2281 B，
+正好等于 `unpackedSize` 的 294 B 差）。四轮代码都在：`attachWebSocketHeartbeat`×2、`createReadStream`×9、
+`reconcileInProgressFromThreadGroups`（`index-CzKL5USY.js`，file hash 与本地构建同名）、`BUILD_ID='9c9a8893c4'`。
+⇒ **上架 shasum 与本地 dry-run `6026ad2f…` 不同属正常，diff 全在 package.json 的发布期重写；发版记录以 registry 为准。**
+
+⚠️ **核对时踩了两个缓存坑**：①首查（14:46:15）`latest` 仍是 0.1.136、版本端点与 tarball 全 404，**20 秒后**才出现
+—— 包文档带 `Cache-Control: public, max-age=300`，**别拿一次查询断言「没发出去」**；②tarball 的 CDN 比元数据慢，
+元数据已显示 137、tarball 仍回 21 字节 `{"error":"Not found"}`，加 `?cb=<随机>` + `Cache-Control: no-cache` 才拿到真包。
+
+**上架后三项核对（全部通过）**（别信 `npm publish` 的成功横幅，那是开始提示）：① `dist-tags.latest` ＝ `0.1.137` ✅；
+② 版本端点 `/codex-mobile-re/0.1.137` ＝ `HTTP 200`、tarball 直链可下载（1,678,403 B）✅；③ tarball 复算 sha1
+＝ `fac7e79e…` 与 `dist.shasum` **逐位一致**，sha512 亦与 `dist.integrity` 一致 ✅。
+
+**顺带更正一条旧记录**：`0.1.135` **不是空号** —— 它于 `2026-10-19T15:19:29.289Z` 实际上架（shasum
+`adefc3d41b284d544a6f3fb95f513aa3bda23c3d`），即当年那次孤儿暂存后来被批准（时间点正好解释包文档一直挂着的
+`Last-Modified: 2026-10-19T15:19:31Z`）；只是没有 tag/Release（当时已撤回）且始终低于 `latest`，故一直未被察觉。
+「该号不可复用」的结论不变。**教训：判断某版本是否存在，查 `/codex-mobile-re/<ver>` 或 `versions[key]`，别只看 `dist-tags.latest`。**
+
+**仍待回填**：线上重部署时间，以及 round-183 §四-2 剩下的「线上端点心跳核验」读数。
 
 详见 [round-186 §八](../rounds/round-186-stuck-thinking-reconcile.md)。

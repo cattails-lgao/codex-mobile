@@ -187,7 +187,7 @@ round-186 describe 内的 6 例：idle 收口 / `active` 不误清 / 列表快�
 - **Release** `v0.1.137 — 网络稳定性 + 桥层内存根治 + 结束仍 thinking 修复`，`--latest`，`createdAt` **`2026-10-26T04:24:33Z`**（北京 12:24:33），`/releases/latest` 已回读为 `v0.1.137`
 - 包内容（`npm pack --dry-run`）：**1.59MB packed / 4.99MB unpacked**，shasum `6026ad2f9160f7e171c12d6de41dd86f676ae116`（与 0.1.136 的 1.7MB/5.2MB 同量级）
 
-### 8.3 npm 这一步卡在凭据，转由维护者执行
+### 8.3 npm 这一步卡在凭据，转由维护者执行（当日 14:46 已上架，见 8.4）
 
 `npm stage publish` 走不通，**两条现存 token 都是 401**（不是 2FA 问题，是凭据本身被拒）：
 
@@ -203,16 +203,39 @@ round-186 describe 内的 6 例：idle 收口 / `active` 不误清 / 列表快�
 1. **`~/.npmrc` 的 `registry` 指向 `https://registry.npmmirror.com/`** ⇒ 直接 `npm publish` 会往**镜像**发。必须显式 `--registry=https://registry.npmjs.org/`；`npm login` 同样要带（否则登录态写到镜像的 key 下，npmjs 侧仍是旧 token）。
 2. **token 失效是静默的**：`npm whoami` 只给一行 `E401`，不告诉你哪枚、为什么。先 `curl -H "Authorization: Bearer <token>" https://registry.npmjs.org/-/whoami` 单点验，别在 `publish` 里试错（失败一次就是一次 `E409`/孤儿暂存的风险）。
 
-### 8.4 上架后必做的三项核对
+### 8.4 上架完成与三项核对（2026-10-26 14:46）
 
-别信 `npm publish` 的成功横幅（那是**开始**提示），按这个顺序验：
+维护者在自己终端直接 `npm publish`（未走暂存），**上架时刻 `2026-10-26T06:46:35.080Z` ＝北京 14:46:35**，`dist-tags.latest` ＝ **`0.1.137`**。
 
-1. `curl -sI https://registry.npmjs.org/codex-mobile-re` 看 `Last-Modified` + `Age` —— `Age` 小＝新鲜副本、`Last-Modified` 没变＝源站从未被写；
-2. `npm view codex-mobile-re dist-tags.latest` 应为 `0.1.137`；
-3. 下载 tarball 复算 sha1，与 `6026ad2f…` 对齐（0.1.136 就是这么验的，逐位一致才算闭环）。
+| 检查 | 结果 |
+| --- | --- |
+| `dist-tags.latest` | `0.1.137` ✅ |
+| 版本端点 `/codex-mobile-re/0.1.137` | `HTTP 200` ✅ |
+| tarball 复算 sha1 | **`fac7e79ea71294ff30d22ac250ad8ede0d309aba`**，与 registry `dist.shasum` 逐位一致 ✅ |
+| tarball 复算 sha512 | 与 `dist.integrity` 一致（`sha512-vrksqnxX…wwHg==`）✅ |
+| 包规模 | 54 文件 · unpacked **5,235,296 B** · 发布者 `lgao7779` |
+
+**内容级核对（不只看哈希）**：解包后与本地验过的产物**逐文件比对 54 个文件，53 个 sha1 完全相同**；唯一不同的是 `package.json` —— npm 发布时会重写它（去掉 `packageManager` 与 `prepublishOnly`、重新缩进），2575 → 2281 字节，正好等于 `unpackedSize` 的 **294 字节**差。四轮代码都在包里：`attachWebSocketHeartbeat`×2（r183）、`createReadStream`×9（r185）、`reconcileInProgressFromThreadGroups`（`index-CzKL5USY.js`，**文件 hash 与本地构建产物同名**）、`BUILD_ID = '9c9a8893c4'`（r183 指纹注入）。
+
+⚠️ **两个缓存陷阱（第一次核对时踩了）**：
+
+1. **先查 404、20 秒后再查就有了**：第一次查（14:46:15）`dist-tags.latest` 仍是 `0.1.136`、版本端点与 tarball 都 404；20 秒后（14:46:35 上架）全部出现。包文档带 `Cache-Control: public, max-age=300` ⇒ **别拿一次查询就断言「没发出去」**，至少带 `Cache-Control: no-cache` 复测一次。
+2. **tarball 的 CDN 比元数据慢**：元数据已显示 0.1.137、版本端点已 200，但 tarball 直链仍回 21 字节的 `{"error":"Not found"}`；加 `?cb=<随机>` 并带 `Cache-Control: no-cache` 后才拿到真正的 1,678,403 字节。
+
+**注意：上架 shasum 与本地 dry-run 不同**。本地 `npm pack --dry-run`（托管 npm 12.2.0）算出 `6026ad2f…`，实际上架是 `fac7e79e…` —— 差异**全部来自 `package.json` 的发布期重写**，不是内容不一致。**发版记录一律以 registry 上的 shasum 为准。**
 
 ### 8.5 诚实边界
 
-1. **本文件记录的是中间态**：tag 与 Release 已发，**npm 尚未上架**，上架时刻与最终 shasum 待维护者操作后回填。
+1. **npm 侧已闭环**：tag `v0.1.137` → Release Latest `2026-10-26T04:24:33Z` → 上架 `2026-10-26T06:46:35.080Z`（shasum `fac7e79e…`），三项核对全过。
 2. **线上仍是 round-185 的构建**，0.1.137 要重新部署才生效；round-183 §四-2 剩下的「线上端点心跳核验」也要等这次部署。
 3. `SHARED_BRIDGE_VERSION` 仍是 `experimental-api-v7`（`git log -S` 核实 `v0.1.136..HEAD` 未动过）⇒ 与桌面端内置桥的兼容约定没破。
+
+### 8.6 顺带更正一条旧记录：0.1.135 实际上架过
+
+以前的文档（round-180、总入口 npm 行、台账）都写着「0.1.135 已永久作废 / registry `versions` 无该版本 / 版本槽被孤儿暂存记录占住」。**本次核对发现它存在**：
+
+- `0.1.135` 于 **`2026-10-19T15:19:29.289Z`** 上架，shasum **`adefc3d41b284d544a6f3fb95f513aa3bda23c3d`**；
+- 也就是说那次孤儿暂存记录后来被**批准**了（时间点正好解释包文档的 `Last-Modified: 2026-10-19T15:19:31Z`，这个值一直挂在 136 时代之后）；
+- 它**没有**对应的 GitHub tag / Release（当时已撤回），而 `dist-tags.latest` 一直是 `0.1.136`（0.1.135 < 0.1.136）⇒ 所以一直没被注意到。
+
+**结论**：0.1.135 不是空号，内容与 0.1.136 同批（136 是它的重发版）。「该版本号不可复用」这一点不变。**教训：判断某版本是否存在，查 `/codex-mobile-re/<ver>` 或 `versions[key]`，别只看 `dist-tags.latest`。**
