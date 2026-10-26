@@ -3443,3 +3443,173 @@ describe('rollbackSelectedThread returns an explicit status (round-184)', () => 
     expect(gatewayMocks.revertThread).not.toHaveBeenCalled()
   })
 })
+
+// round-186：用户报「线上偶尔明明结束了还在 thinking」。`turn/completed` 是清转圈的
+// 唯一入口，一旦它落在 WS 断线窗口里就永久丢失（没有补偿路径，只能刷新页面）。
+// 这里锁定两条兜底：①`thread/status/changed` 的 idle/systemError 直接收口；
+// ②线程列表快照里服务端的 `inProgress` 与本地对账（带「快照早于本轮开始」的竞态保护）。
+describe('round-186 stuck thinking reconciliation', () => {
+  function installThinkingThread(threadId = 'thread-1') {
+    gatewayMocks.getPendingServerRequests.mockResolvedValue([])
+    gatewayMocks.resumeThread.mockResolvedValue(null)
+    gatewayMocks.getThreadDetail.mockResolvedValue({
+      messages: [],
+      inProgress: true,
+      activeTurnId: 'turn-1',
+      turnIndexByTurnId: {},
+      hasMoreOlder: false,
+    })
+    gatewayMocks.getThreadGroupsPage.mockResolvedValue({
+      groups: [{ projectName: 'project', threads: [thread(threadId, '/tmp/project')] }],
+      nextCursor: null,
+    })
+    const state = useDesktopState()
+    state.primeSelectedThread(threadId)
+    return state
+  }
+
+  it('clears the live overlay when thread/status/changed reports idle', async () => {
+    installTestWindow()
+    let notificationHandler: ((notification: { method: string; params?: unknown }) => void) | undefined
+    gatewayMocks.subscribeCodexNotifications.mockImplementation((handler) => {
+      notificationHandler = handler as typeof notificationHandler
+      return vi.fn()
+    })
+    const state = installThinkingThread()
+    await state.loadMessages('thread-1')
+    expect(state.selectedLiveOverlay.value).not.toBeNull()
+
+    state.startPolling()
+    notificationHandler?.({ method: 'thread/status/changed', params: { threadId: 'thread-1', status: { type: 'idle' } } })
+
+    expect(state.selectedLiveOverlay.value).toBeNull()
+  })
+
+  it('keeps the overlay when the status change still reports active', async () => {
+    installTestWindow()
+    let notificationHandler: ((notification: { method: string; params?: unknown }) => void) | undefined
+    gatewayMocks.subscribeCodexNotifications.mockImplementation((handler) => {
+      notificationHandler = handler as typeof notificationHandler
+      return vi.fn()
+    })
+    const state = installThinkingThread()
+    await state.loadMessages('thread-1')
+
+    state.startPolling()
+    notificationHandler?.({
+      method: 'thread/status/changed',
+      params: { threadId: 'thread-1', status: { type: 'active', activeFlags: [] } },
+    })
+
+    expect(state.selectedLiveOverlay.value).not.toBeNull()
+  })
+
+  // 用户补充的现场事实：刷新页面后就正常了。刷新之所以有效，是因为重新
+  // loadMessages 会拿服务端的 `inProgress` 覆盖本地残留的 true
+  // （useDesktopMessageHistoryLoading:297）。这条把「刷新能修」固化下来 ——
+  // 它同时也是本轮所有兜底失效时的最后一道。
+  it('self-heals on a plain re-load once the server reports the thread idle (refresh path)', async () => {
+    installTestWindow()
+    const state = installThinkingThread()
+    await state.loadMessages('thread-1')
+    expect(state.selectedLiveOverlay.value).not.toBeNull()
+
+    // 这一轮其实早结束了，只是 `turn/completed` 丢了：服务端现在说 idle。
+    gatewayMocks.getThreadDetail.mockResolvedValue({
+      messages: [],
+      inProgress: false,
+      activeTurnId: '',
+      turnIndexByTurnId: {},
+      hasMoreOlder: false,
+    })
+    await state.loadMessages('thread-1', { force: true })
+
+    expect(state.selectedLiveOverlay.value).toBeNull()
+  })
+
+  it('clears a stuck turn when a later thread-list snapshot reports the thread idle', async () => {
+    installTestWindow()
+    const state = installThinkingThread()
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_000)
+    try {
+      await state.loadMessages('thread-1')
+      expect(state.selectedLiveOverlay.value).not.toBeNull()
+
+      // 列表请求发出于本地「开始」之后 ⇒ 快照必然包含这一轮，说 idle 就是真结束了。
+      nowSpy.mockReturnValue(2_000)
+      await state.refreshAll({ includeSelectedThreadMessages: false, forceThreadRefresh: true })
+
+      expect(state.selectedLiveOverlay.value).toBeNull()
+    } finally {
+      nowSpy.mockRestore()
+    }
+  })
+
+  it('re-fetches the thread list on ready and clears a turn that ended while disconnected', async () => {
+    installTestWindow()
+    // `ready` 之后的收口走 syncFromNotifications 的防抖分支，这里让定时器立刻执行。
+    vi.mocked(window.setTimeout).mockImplementation(((callback: TimerHandler) => {
+      if (typeof callback === 'function') {
+        void Promise.resolve().then(() => callback())
+      }
+      return 1
+    }) as typeof window.setTimeout)
+    let notificationHandler: ((notification: { method: string; params?: unknown }) => void) | undefined
+    gatewayMocks.subscribeCodexNotifications.mockImplementation((handler) => {
+      notificationHandler = handler as typeof notificationHandler
+      return vi.fn()
+    })
+    const state = installThinkingThread()
+    // 首次加载：列表里这一轮还在跑（对账不应该清）。
+    gatewayMocks.getThreadGroupsPage
+      .mockResolvedValueOnce({
+        groups: [{ projectName: 'project', threads: [{ ...thread('thread-1', '/tmp/project'), inProgress: true }] }],
+        nextCursor: null,
+      })
+      .mockResolvedValue({
+        groups: [{ projectName: 'project', threads: [thread('thread-1', '/tmp/project')] }],
+        nextCursor: null,
+      })
+    await state.refreshAll({ includeSelectedThreadMessages: false, forceThreadRefresh: true })
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_000)
+    await state.loadMessages('thread-1')
+    expect(state.selectedLiveOverlay.value).not.toBeNull()
+
+    state.startPolling()
+    // `ready` = WS 重连；断线期间这轮已经结束，`turn/completed` 永久丢了。
+    // 把时钟推后，避免「列表快照与本地开始同毫秒」被竞态守卫挡下。
+    nowSpy.mockReturnValue(5_000)
+    const callsBeforeReady = gatewayMocks.getThreadGroupsPage.mock.calls.length
+    notificationHandler?.({ method: 'ready', params: {} })
+
+    try {
+      // `recoverBridgeState` 是 `void` 触发的，用微任务轮转把它跑完。
+      for (let index = 0; index < 12 && state.selectedLiveOverlay.value !== null; index += 1) {
+        await Promise.resolve()
+      }
+      expect(state.selectedLiveOverlay.value).toBeNull()
+      // 旧实现里列表已加载过就不会再取（`hasLoadedThreads` 为真），这条断言锁住「重连必重取」。
+      expect(gatewayMocks.getThreadGroupsPage.mock.calls.length).toBeGreaterThan(callsBeforeReady)
+    } finally {
+      nowSpy.mockRestore()
+    }
+  })
+
+  it('trusts a snapshot that was issued before the turn started only when it proves the turn ended', async () => {
+    installTestWindow()
+    const state = installThinkingThread()
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(2_000)
+    try {
+      await state.loadMessages('thread-1')
+      expect(state.selectedLiveOverlay.value).not.toBeNull()
+
+      // 快照发出时刻早于本地开始时刻（响应晚到）⇒ 它看不到这一轮，不能据此收口。
+      nowSpy.mockReturnValue(1_500)
+      await state.refreshAll({ includeSelectedThreadMessages: false, forceThreadRefresh: true })
+
+      expect(state.selectedLiveOverlay.value).not.toBeNull()
+    } finally {
+      nowSpy.mockRestore()
+    }
+  })
+})

@@ -20,6 +20,12 @@ export interface ThreadListLoadingDeps {
   /** 进行中线程表：分页暂停/恢复的依据，历史高风险路径，行为保持不变。 */
   inProgressById: Ref<Record<string, boolean>>
   applyThreadGroups: (groups: UiProjectGroup[], rootsState: WorkspaceRootsState | null) => void
+  /**
+   * round-186：用列表快照里服务端的 `inProgress` 清掉本地「卡住的转圈」。
+   * `snapshotStartedAt` = 该次列表请求的**发出**时刻，用来卡住「快照早于本轮开始」
+   * 的竞态（那种快照里必然还是 idle，不能据此判定已结束）。
+   */
+  reconcileInProgressFromThreadGroups: (groups: UiProjectGroup[], snapshotStartedAt: number) => void
   hydrateWorkspaceRootsStateIfNeeded: (groups: UiProjectGroup[], rootsState: WorkspaceRootsState | null) => Promise<void>
   loadThreadTitleCacheIfNeeded: (options?: { force?: boolean }) => Promise<void>
   loadWorkspaceRootsStateForThreadList: () => Promise<WorkspaceRootsState | null>
@@ -33,6 +39,7 @@ export function createDesktopThreadListLoading(deps: ThreadListLoadingDeps) {
     projectGroups,
     inProgressById,
     applyThreadGroups,
+    reconcileInProgressFromThreadGroups,
     hydrateWorkspaceRootsStateIfNeeded,
     loadThreadTitleCacheIfNeeded,
     loadWorkspaceRootsStateForThreadList,
@@ -115,11 +122,13 @@ export function createDesktopThreadListLoading(deps: ThreadListLoadingDeps) {
     isLoadingRemainingThreadPages = true
 
     try {
+      const snapshotStartedAt = Date.now()
       const page = await getThreadGroupsPage(threadListNextCursor, getBackgroundThreadListLimit())
       threadListNextCursor = page.nextCursor
       hasLoadedAllThreadPages = page.nextCursor === null
       isThreadListFullyLoaded.value = hasLoadedAllThreadPages
       loadedThreadListGroups = mergeThreadGroupPages(loadedThreadListGroups, page.groups)
+      reconcileInProgressFromThreadGroups(page.groups, snapshotStartedAt)
       applyThreadGroups(loadedThreadListGroups, rootsState)
     } catch {
       // Keep the first page usable; a later refresh can retry remaining pages.
@@ -150,6 +159,7 @@ export function createDesktopThreadListLoading(deps: ThreadListLoadingDeps) {
     }
 
     try {
+      const snapshotStartedAt = Date.now()
       const [page, rootsState] = await Promise.all([
         getThreadGroupsPage(),
         loadWorkspaceRootsStateForThreadList(),
@@ -167,6 +177,7 @@ export function createDesktopThreadListLoading(deps: ThreadListLoadingDeps) {
       isThreadListFullyLoaded.value = hasLoadedAllThreadPages
       await hydrateWorkspaceRootsStateIfNeeded(groups, rootsState)
 
+      reconcileInProgressFromThreadGroups(groups, snapshotStartedAt)
       applyThreadGroups(loadedThreadListGroups, rootsState)
       hasLoadedThreads.value = true
       lastThreadListLoadAt = Date.now()

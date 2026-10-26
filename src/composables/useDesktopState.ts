@@ -367,6 +367,11 @@ export function useDesktopState() {
   const liveCommandsByThreadId = ref<Record<string, UiMessage[]>>({})
   const liveFileChangeMessagesByThreadId = ref<Record<string, UiMessage[]>>({})
   const inProgressById = ref<Record<string, boolean>>({})
+  // round-186：每个「转为进行中」的本地时间戳。`turn/completed` 在 WS 断线窗口里会
+  // 永久丢失，此时只能靠线程列表（服务端真相）兜底清掉转圈；但列表响应可能是**在本轮
+  // 开始之前**发出的快照（里面自然还是 idle），据此清理会把刚起的一轮误杀。用「本地
+  // 开始时刻 < 快照发出时刻」卡住这条竞态：只有快照确实能看到这一轮时，才允许清。
+  const inProgressStartedAtById = new Map<string, number>()
   const reasoningWriteDeps: LiveReasoningWriteDeps = {
     liveReasoningTextByThreadId,
     inProgressById,
@@ -630,6 +635,8 @@ export function useDesktopState() {
     projectGroups,
     inProgressById,
     applyThreadGroups,
+    // round-186：线程列表落地后用服务端真相收口本地「正在跑」表。
+    reconcileInProgressFromThreadGroups,
     hydrateWorkspaceRootsStateIfNeeded,
     loadThreadTitleCacheIfNeeded,
     loadWorkspaceRootsStateForThreadList,
@@ -1236,10 +1243,12 @@ export function useDesktopState() {
         ...inProgressById.value,
         [threadId]: true,
       }
+      inProgressStartedAtById.set(threadId, Date.now())
       // round-27：恢复上次的快照思考文本（刷新后 overlay 不空白）
       restoreLiveReasoningSnapshot(threadId)
     } else {
       inProgressById.value = omitKey(inProgressById.value, threadId)
+      inProgressStartedAtById.delete(threadId)
       clearCompletedTurnLiveState(threadId, { keepLiveCommands: options.keepDeferredLiveCommands === true })
       clearInterruptPersistenceGate(threadId)
       // round-83：长时间 turn（Thinking/工具调用）会把上下文推过阈值，而发送前预检在
@@ -1968,6 +1977,14 @@ export function useDesktopState() {
 
     if (notification.method === 'thread/status/changed') {
       const threadId = extractThreadIdFromNotification(notification)
+      // round-186：`thread/status/changed` 本身就是「这一轮有没有在跑」的权威信号，
+      // 此前只拿它触发一次线程列表刷新，状态值被丢掉了。`idle` / `systemError`
+      // 明确表示已不在运行 ⇒ 直接收口，覆盖 `turn/completed` 丢失的情况。
+      // `active` 不在这里置位（缺 activeTurnId 时中断按钮拿不到轮次，且列表对账已够）。
+      const statusType = readString(asRecord(asRecord(notification.params)?.status)?.type)
+      if (threadId && (statusType === 'idle' || statusType === 'systemError')) {
+        if (inProgressById.value[threadId] === true) finishTurnForThread(threadId)
+      }
       // A status change (e.g. another client started a turn) may alter the
       // message payload of the selected thread; queueEventDrivenSync refreshes
       // the thread list for any thread/* notification.
@@ -2457,6 +2474,28 @@ export function useDesktopState() {
       return isProjectlessGroup(group)
     })
     return orderGroupsByWorkspaceProjectOrder(filteredGroups, rootsState, duplicateLeafNames)
+  }
+
+  // round-186：用线程列表里服务端给的 `inProgress`（`thread.status` 归一化的结果，
+  // 见 normalizers/v2 的 readThreadInProgress）对账本地「正在跑」表。
+  // 只做「清」不做「置」：列表快照有延迟，拿它点亮转圈会误报；而它说「已空闲」时，
+  // 只要快照确实晚于本地那一刻开始，就一定是这轮已经结束了。
+  // 触发场景就是用户报的「明明结束了还在 thinking」——WS 断线窗口里丢掉的
+  // `turn/completed` 没有任何补偿路径，此前只能刷新页面。
+  function reconcileInProgressFromThreadGroups(groups: UiProjectGroup[], snapshotStartedAt: number): void {
+    const endedThreadIds: string[] = []
+    for (const group of groups) {
+      for (const thread of group.threads) {
+        if (inProgressById.value[thread.id] !== true) continue
+        if (thread.inProgress === true) continue
+        const startedAt = inProgressStartedAtById.get(thread.id) ?? 0
+        if (startedAt >= snapshotStartedAt) continue
+        endedThreadIds.push(thread.id)
+      }
+    }
+    for (const threadId of endedThreadIds) {
+      finishTurnForThread(threadId)
+    }
   }
 
   function applyThreadGroups(groups: UiProjectGroup[], rootsState: WorkspaceRootsState | null): void {
@@ -3755,10 +3794,17 @@ export function useDesktopState() {
 
   async function recoverBridgeState(): Promise<void> {
     await loadPendingServerRequestsFromBridge()
-    pendingThreadsRefresh = !threadListLoading.hasLoadedThreads.value
+    // round-186：`ready` 只在 WS（重）连上时来，断线期间丢掉的 `turn/completed`
+    // 就在这里补一次对账的机会 —— 本地还认为有线程在跑时，强制重取一次线程列表，
+    // 由 reconcileInProgressFromThreadGroups 按服务端真相收口（否则转圈会一直转
+    // 到用户手动刷新）。没有「像在跑」的线程时仍然走原来的省流量语义。
+    const hasSuspectedStuckTurn = Object.values(inProgressById.value).some((value) => value === true)
+    pendingThreadsRefresh = !threadListLoading.hasLoadedThreads.value || hasSuspectedStuckTurn
+    // 疑似卡住的这一发必须真去取（`loadThreads` 有 2s 复用窗口，重连常常落在窗口内）。
+    if (hasSuspectedStuckTurn) pendingThreadsRefreshForce = true
     if (
       selectedThreadId.value &&
-      loadedMessagesByThreadId.value[selectedThreadId.value] !== true
+      (hasSuspectedStuckTurn || loadedMessagesByThreadId.value[selectedThreadId.value] !== true)
     ) {
       pendingThreadMessageRefresh.add(selectedThreadId.value)
     }
