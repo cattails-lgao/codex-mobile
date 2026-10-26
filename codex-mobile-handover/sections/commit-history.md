@@ -1503,7 +1503,7 @@ UI 契约 61/61 · 脱敏 0 · md-links 0 · 派生 doc 0 · `check-session-log-
 详见 [round-186](../rounds/round-186-stuck-thinking-reconcile.md)。
 
 
-## v0.1.137 发布 · round-183/184/185/186 四轮合并（2026-10-26；tag / Release 已发，npm 待维护者上架）
+## v0.1.137 发布 · round-183/184/185/186 四轮合并（2026-10-26；tag / Release / npm / 线上部署 四闭环）
 
 **起因**：round-185 §六① 留下的交付缺口 —— 为验证修复，round-185 的 `dist/` 与 `dist-cli/` 直接覆盖了服务器的
 `codex-mobile-re@0.1.136` 包目录，`package.json` 仍是 `0.1.136` ⇒ `--version` 与实际代码不符。0.1.137 把
@@ -1558,6 +1558,13 @@ pnpm `auth.ini`（发 0.1.136 时用的那枚）与 `~/.npmrc` 里的另一枚�
 `Last-Modified: 2026-10-19T15:19:31Z`）；只是没有 tag/Release（当时已撤回）且始终低于 `latest`，故一直未被察觉。
 「该号不可复用」的结论不变。**教训：判断某版本是否存在，查 `/codex-mobile-re/<ver>` 或 `versions[key]`，别只看 `dist-tags.latest`。**
 
-**仍待回填**：线上重部署时间，以及 round-183 §四-2 剩下的「线上端点心跳核验」读数。
+**线上部署（2026-10-26 15:02:16 CST，维护者执行）**：服务全程 `active (running)`、`NRestarts=0`、RSS **126MB**，部署后 `journalctl` 内 **0 FATAL / 0 heap limit / 0 core-dump**（上一次运行停止时 systemd 记的 `1.7G memory peak / 1.1G swap peak` 是修复前累计高水位，可作对照）。
+
+- **安装布局（旧记录的假设有误）**：真实包目录是 **pnpm 全局** `/root/.local/share/pnpm/bin/global/5/node_modules/codex-mobile-re`；该机 `npm root -g` 指向 `fnm/node-versions/v24.14.1/…/lib/node_modules`（**空的**，按它核版本会得到「包不存在」的假结论）；该 CLI **不支持 `--version`**（`unknown option`），版本只在启动横幅与日志里。
+- **产物核对（字符串级）**：`package.json` = 启动横幅 = **0.1.137**；`dist-cli` 内 `attachWebSocketHeartbeat`×2、`createReadStream`×9；前端命中 `dist/assets/index-CzKL5USY.js`（含 `reconcileInProgressFromThreadGroups`）；`dist/sw.js` 的 `BUILD_ID = 9c9a8893c4`。**chunk 名与 BUILD_ID 双双与本机构建相同 ⇒ 跑的就是发版时逐项核对过的那份产物。**
+- **round-183 §四-2 的线上核验已闭环**：生产 nginx **1.26.3** 的 `conf.d/codex.arderpanada.top.conf` 里 `location /`（承载 `/codex-api/ws`）写着 `proxy_read_timeout 120s` / `proxy_send_timeout 60s`，**阈值未被放宽**；脚本连 `wss://codex.arderpanada.top/codex-api/ws` 观察 **150s** ⇒ **存活未断、ping 5 次**（25.5 / 50.5 / 75.5 / 100.5 / 125.5s，平均间隔 **25.0s**）`VERDICT: PASS`。⇒ 真件机制（本机真 nginx）与线上环境**双闭环**。
+- 核验脚本：`tmp/r187-online-ws-idle.cjs`（先用含心跳的 `dist-cli` 自检：能数 25s 周期 ping、能提取 `BUILD_ID`、主动 `terminate()` 不误判；自检时确实抓到并修掉了这个误判）。
+
+**仍未验**：round-186 本身的现场（客户端「结束了还 thinking」）未复现，本次只证「修复已在线上 + 服务健康」。要观察自动收口，需再遇到一次断线期间的 turn 完成，或用 CDP 人为断网造一次。
 
 详见 [round-186 §八](../rounds/round-186-stuck-thinking-reconcile.md)。

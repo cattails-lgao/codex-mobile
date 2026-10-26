@@ -227,7 +227,7 @@ round-186 describe 内的 6 例：idle 收口 / `active` 不误清 / 列表快�
 ### 8.5 诚实边界
 
 1. **npm 侧已闭环**：tag `v0.1.137` → Release Latest `2026-10-26T04:24:33Z` → 上架 `2026-10-26T06:46:35.080Z`（shasum `fac7e79e…`），三项核对全过。
-2. **线上仍是 round-185 的构建**，0.1.137 要重新部署才生效；round-183 §四-2 剩下的「线上端点心跳核验」也要等这次部署。
+2. ~~线上仍是 round-185 的构建，0.1.137 要重新部署才生效；round-183 §四-2 剩下的「线上端点心跳核验」也要等这次部署。~~ **已闭环（2026-10-26 15:02 部署，见 §8.7）**：线上包 `0.1.137`、`BUILD_ID 9c9a8893c4`、四轮代码字符串全中；生产 nginx（`proxy_read_timeout 120s`）下 ws **存活 150s、ping 5 次 / 平均间隔 25.0s**。
 3. `SHARED_BRIDGE_VERSION` 仍是 `experimental-api-v7`（`git log -S` 核实 `v0.1.136..HEAD` 未动过）⇒ 与桌面端内置桥的兼容约定没破。
 
 ### 8.6 顺带更正一条旧记录：0.1.135 实际上架过
@@ -239,3 +239,54 @@ round-186 describe 内的 6 例：idle 收口 / `active` 不误清 / 列表快�
 - 它**没有**对应的 GitHub tag / Release（当时已撤回），而 `dist-tags.latest` 一直是 `0.1.136`（0.1.135 < 0.1.136）⇒ 所以一直没被注意到。
 
 **结论**：0.1.135 不是空号，内容与 0.1.136 同批（136 是它的重发版）。「该版本号不可复用」这一点不变。**教训：判断某版本是否存在，查 `/codex-mobile-re/<ver>` 或 `versions[key]`，别只看 `dist-tags.latest`。**
+### 8.7 部署上线与线上核验（2026-10-26 15:02，维护者部署 / 本轮取证）
+
+维护者在服务器上完成部署，**服务重启时刻 `2026-10-26 15:02:16 CST`**。本轮上机做了只读核验（未写任何用户数据）。
+
+**实际安装布局**（与旧记录的假设不同，值得记下来）：服务不是 npm 全局装的，而是 **pnpm 全局**，且 `npm root -g` 指向的 fnm 目录是空的：
+
+| 项 | 值 |
+| --- | --- |
+| systemd 单元 | `codexapp.service` |
+| 真实包目录 | `/root/.local/share/pnpm/bin/global/5/node_modules/codex-mobile-re` |
+| ExecStart | `node …/dist-cli/index.js -p 3030 --no-password --no-tunnel --no-open --no-login` |
+| ⚠️ 陷阱 1 | `npm root -g` 在该机指向 `fnm/node-versions/v24.14.1/…/lib/node_modules`，**里面没有这个包** ⇒ 按 `npm root -g` 去核版本会得到「包不存在」的假结论 |
+| ⚠️ 陷阱 2 | 该 CLI 不支持 `--version`（报 `unknown option '--version'`）；版本号只在启动横幅 `Version: 0.1.137` 与服务日志里 |
+| 附注 | 启动参数带 `--no-login --no-password` ⇒ 线上 ws 核验**不需要鉴权**，裸连即可 |
+
+**产物核对（字符串级，不认构建日志）**：
+
+| 检查 | 线上值 |
+| --- | --- |
+| `package.json` version | **0.1.137** ✅ |
+| 启动横幅 | `Version:  0.1.137` ✅ |
+| `dist-cli/index.js` 的 `attachWebSocketHeartbeat` | **2** 处（r183）✅ |
+| `dist-cli/index.js` 的 `createReadStream` | **9** 处（r185）✅ |
+| 前端 `reconcileInProgressFromThreadGroups` | 命中 `dist/assets/index-CzKL5USY.js`（r186）✅ |
+| `dist/sw.js` 的 `BUILD_ID` | **`9c9a8893c4`** —— 与本机已验证构建**逐位一致**（r183 指纹注入生效）✅ |
+| `dist/` 文件时间 | `2026-10-26 14:58`（＝部署时刻） |
+
+前端 chunk 名 `index-CzKL5USY.js` 与 `BUILD_ID` 双双与本地构建相同 ⇒ **线上跑的就是本轮逐项核对过的那份产物**，不是服务器上重新构建的近似版。
+
+**服务健康**：`active (running)`、`NRestarts=0`、RSS **126MB**（运行 8 分钟）、`journalctl --since 14:55` 内 **FATAL / heap limit / core-dump 命中 0**。上一次运行（停止时）systemd 记录 `1.7G memory peak, 1.1G memory swap peak` —— 那是**修复前**那段运行的累计高水位，正好与 round-185 的 OOM 取证对上，可作对照。
+
+#### 8.7.1 线上 ws 心跳核验（闭环 round-183 §四-2）
+
+用本轮新写的 `tmp/r187-online-ws-idle.cjs`（先在本机用含心跳的 `dist-cli` 自检过：能数到 25s 周期的 ping、能正确提取 `BUILD_ID`、主动 `terminate()` 不被误判为掉线 —— 自检时确实发现并修掉了这个误判）连**生产端点** `wss://codex.arderpanada.top/codex-api/ws`，观察窗口 **150s**：
+
+```
+[+0.3s] 线上 sw.js => HTTP 200 · BUILD_ID=9c9a8893c4 · 期望 9c9a8893c4 => 一致
+[+0.3s] /codex-api/server-requests/pending => HTTP 200 {"data":[]}
+[+0.5s] open · ready {"ok":true}
+[+25.5s] ping #1   [+50.5s] ping #2   [+75.5s] ping #3   [+100.5s] ping #4   [+125.5s] ping #5
+VERDICT: PASS（存活 150s 未断，ping 5 个，平均间隔 25s）
+```
+
+**这个 PASS 有对照意义，不是自欺**：同一台机的生产 nginx 是 **1.26.3**，其 `conf.d/codex.arderpanada.top.conf` 的 `location /`（承载 `/codex-api/ws`）明确写着 `proxy_read_timeout 120s` / `proxy_send_timeout 60s` ⇒ **超时阈值没有被放宽**，连接能活到 150s 只能是心跳在续期。加上 round-183 §3.3b 的本机真 nginx 实验（带心跳 304.8s / 零流量对照组精确 120.0s 断），**机制与线上环境双双落实**。
+
+⇒ round-183 §四-2 那条「须等重部署后复测」的尾巴**至此关闭**。
+
+#### 8.7.2 一件仍未验的事
+
+**round-186 本身的现场未复现**（客户端「明明结束了还在 thinking」）。本次能确认的只是：修复代码已在线上、服务健康、没有 OOM。要真正观察「丢失通知后自动收口」，需要**再遇到一次断线期间的 turn 完成**；这条只能等自然发生，或用 CDP 人为断网造一次（本轮未做）。
+
