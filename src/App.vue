@@ -4416,6 +4416,29 @@ function reportEditFailure(message: string): void {
   if (threadId) setTurnErrorForThread(threadId, message)
 }
 
+// round-187：编辑保存链路的每一跳都走 callRpc——fetch 与 response.text() 都没有
+// 超时，本函数原先也没有 catch。任何一跳挂死（桥侧 handler 等不到 app-server 回包
+// 就是这种形态）＝editSaving 永远不清＝「保存中」卡死；任何一跳抛错＝异常逸出成
+// unhandled rejection，失败原因依旧不可见。给整条链加显式上限：超时/抛错都走
+// reportEditFailure（round-184 的可见失败通道），用户能重试而不是无限等待。
+const EDIT_SAVE_TIMEOUT_MS = 120_000
+
+function withEditSaveTimeout<T>(promise: Promise<T>, timeoutMessage: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(timeoutMessage)), EDIT_SAVE_TIMEOUT_MS)
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (error: unknown) => {
+        clearTimeout(timer)
+        reject(error)
+      },
+    )
+  })
+}
+
 async function onEditMessageResend(payload: { turnId: string; text: string }): Promise<void> {
   const targetTurnId = payload.turnId.trim()
   const nextText = payload.text.trim()
@@ -4424,8 +4447,9 @@ async function onEditMessageResend(payload: { turnId: string; text: string }): P
   if (editSaving.value) return
   editSaving.value = true
   editFailure.value = ''
+  const editSaveTimeoutMessage = t('Edit failed: the edit did not finish in time. Try again in a moment.')
   try {
-    const result = await rollbackSelectedThread(targetTurnId)
+    const result = await withEditSaveTimeout(rollbackSelectedThread(targetTurnId), editSaveTimeoutMessage)
     if (result === 'already-busy') {
       reportEditFailure(t('Edit failed: another rollback is still running. Try again in a moment.'))
       return
@@ -4458,7 +4482,13 @@ async function onEditMessageResend(payload: { turnId: string; text: string }): P
       reportEditFailure(t('Edit failed: the original message is still in the thread after rolling back. Try again.'))
       return
     }
-    await sendMessageToSelectedThread(nextText, [], [], 'steer', [], undefined, undefined, 'edit_user_message')
+    await withEditSaveTimeout(
+      sendMessageToSelectedThread(nextText, [], [], 'steer', [], undefined, undefined, 'edit_user_message'),
+      editSaveTimeoutMessage,
+    )
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    reportEditFailure(detail.trim().length > 0 ? detail : desktopError.value)
   } finally {
     editSaving.value = false
   }
