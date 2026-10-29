@@ -399,6 +399,41 @@
                   :content-html="renderMarkdownBlocksAsHtml(message.text)"
                   @toggle="toggleReasoningExpand(message)"
                 />
+                <!-- r187：编辑中 ⇒ 消息内容原地替换为输入框（气泡本体变成编辑器，
+                     不再在气泡下方另开一块），保存/取消与失败提示随编辑器留在气泡内。 -->
+                <div
+                  v-else-if="isEditingMessage(message.id) && editingMessage"
+                  class="message-inline-editor message-inline-editor-inplace"
+                  data-message-inline-editor
+                >
+                  <textarea
+                    :ref="setInlineEditorTextareaRef"
+                    v-model="editingMessage!.text"
+                    class="message-inline-editor-textarea"
+                    rows="3"
+                    @keydown.esc.prevent="cancelInlineEdit"
+                  ></textarea>
+                  <div class="message-inline-editor-actions">
+                    <button
+                      type="button"
+                      class="message-inline-editor-button message-inline-editor-primary"
+                      :disabled="editSaving"
+                      @click="confirmInlineEdit"
+                    >{{ editSaving ? t('Saving…') : t('Save') }}</button>
+                    <button
+                      type="button"
+                      class="message-inline-editor-button"
+                      @click="cancelInlineEdit"
+                    >{{ t('Cancel') }}</button>
+                  </div>
+                  <p
+                    v-if="inlineEditFailure"
+                    class="message-inline-editor-error"
+                    role="alert"
+                    data-message-inline-editor-error
+                  >{{ inlineEditFailure }}</p>
+                  <p class="message-inline-editor-note">{{ t('Saving rolls this turn back and resends it with your changes. Later replies will be removed.') }}</p>
+                </div>
                 <div
                   v-else
                   class="message-text-flow"
@@ -518,7 +553,7 @@
               </article>
 
               <MessageToolbar
-                v-if="section !== 'process'"
+                v-if="section !== 'process' && !isEditingMessage(message.id)"
                 :role="message.role"
                 :show-edit="showEditMessageButton(message)"
                 :show-fork="showForkResponseButton(message)"
@@ -530,39 +565,7 @@
                 @copy="message.role === 'user' ? copyUserMessage(message.id) : copyResponse(message.id)"
               />
 
-              <div
-                v-if="isEditingMessage(message.id)"
-                class="message-inline-editor"
-                data-message-inline-editor
-              >
-                <textarea
-                  :ref="setInlineEditorTextareaRef"
-                  v-model="editingMessage!.text"
-                  class="message-inline-editor-textarea"
-                  rows="3"
-                  @keydown.esc.prevent="cancelInlineEdit"
-                ></textarea>
-                <div class="message-inline-editor-actions">
-                  <button
-                    type="button"
-                    class="message-inline-editor-button message-inline-editor-primary"
-                    :disabled="editSaving"
-                    @click="confirmInlineEdit"
-                  >{{ editSaving ? t('Saving…') : t('Save') }}</button>
-                  <button
-                    type="button"
-                    class="message-inline-editor-button"
-                    @click="cancelInlineEdit"
-                  >{{ t('Cancel') }}</button>
-                </div>
-                <p
-                  v-if="inlineEditFailure"
-                  class="message-inline-editor-error"
-                  role="alert"
-                  data-message-inline-editor-error
-                >{{ inlineEditFailure }}</p>
-                <p class="message-inline-editor-note">{{ t('Saving rolls this turn back and resends it with your changes. Later replies will be removed.') }}</p>
-              </div>
+
             </article>
           </div>
         </div>
@@ -3454,6 +3457,21 @@ onBeforeUnmount(() => {
    位置固定在 MessageToolbar 之下、消息 article 内，宽度与气泡列对齐。 */
 .message-inline-editor {
   @apply mt-1.5 flex w-full max-w-full flex-col gap-1.5;
+}
+
+/* r187：原地编辑——编辑器渲染在 .message-card（用户气泡）内部，取代消息正文。
+   文本域融进气泡：去掉自带底色/内边距的突兀感，宽度撑满气泡内容区。 */
+.message-inline-editor-inplace {
+  @apply mt-0;
+}
+
+.message-inline-editor-inplace .message-inline-editor-textarea {
+  @apply bg-transparent px-0 py-0;
+  min-height: 88px;
+}
+
+.message-inline-editor-inplace .message-inline-editor-note {
+  @apply mt-0;
 }
 
 .message-inline-editor-textarea {
