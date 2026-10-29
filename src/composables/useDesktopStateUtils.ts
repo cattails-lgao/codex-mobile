@@ -1198,8 +1198,39 @@ export function findReasoningAnchorIndex(messages: UiMessage[], anchorId: string
 // 回退到消息流末尾（与历史行为一致）。同一轮多条思考按存档顺序排列。
 // round-23：带 reasoningAnchorMessageId 的思考项插到对应工具/命令消息之后
 // （按真实出现时序与工具交错，而不是全部堆在轮次开头）。
+// r187：服务端 reasoning item 自带 summary 的 provider（litellm/deepseek 等）会让
+// 同一轮出现两块「差不多内容」的思考——本地流式存档（原始增量文本，且可能因
+// summary/text 双增量通道重复拼接）与服务端归一化条目（干净 summary）互含。
+// 保留服务端干净副本，丢弃与之互含的本地存档；历史上服务端条目恒为空，
+// 该过滤在既有 provider 上不生效。归一化：压空白 + 小写；低于下限长度不比较，
+// 避免短文本误判。仅匹配同 turnId 的服务端条目，不跨轮。
+function normalizeReasoningTextForDedupe(text: string): string {
+  return text.replace(/\s+/g, ' ').trim().toLowerCase()
+}
+
+const REASONING_DEDUPE_MIN_TEXT_LENGTH = 20
+
+function isReasoningDuplicateOfServer(message: UiMessage, persisted: UiMessage[]): boolean {
+  const localText = normalizeReasoningTextForDedupe(message.text)
+  if (localText.length < REASONING_DEDUPE_MIN_TEXT_LENGTH) return false
+  const localTurnId = message.turnId?.trim() ?? ''
+  return persisted.some((candidate) => {
+    if (candidate.messageType !== 'reasoning') return false
+    if (localTurnId && (candidate.turnId?.trim() ?? '') !== localTurnId) return false
+    const candidateText = normalizeReasoningTextForDedupe(candidate.text)
+    if (candidateText.length < REASONING_DEDUPE_MIN_TEXT_LENGTH) return false
+    return candidateText.includes(localText) || localText.includes(candidateText)
+  })
+}
+
 export function mergePersistedReasoning(persisted: UiMessage[], reasoningMessages: UiMessage[]): UiMessage[] {
   if (reasoningMessages.length === 0) return persisted
+  // r187：先丢弃与同轮服务端思考互含的本地存档（详见上方说明），再按原逻辑插回。
+  const nonDuplicatedReasoning = reasoningMessages.filter(
+    (message) => !isReasoningDuplicateOfServer(message, persisted),
+  )
+  if (nonDuplicatedReasoning.length === 0) return persisted
+  reasoningMessages = nonDuplicatedReasoning
   const result = [...persisted]
   const unattached: UiMessage[] = []
   // round-142：当前消息流里已知的 turnId 集合。用于判断「无 turnIndex 的存档」是否

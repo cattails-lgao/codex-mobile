@@ -36,12 +36,19 @@ defineEmits<{
 const { t } = useUiLanguage()
 
 const summaryText = computed(() => {
-  const summary = props.message.reasoning?.summary ?? []
-  return summary
+  const raw = (props.message.reasoning?.summary ?? [])
     .map((part) => part.trim())
     .filter(Boolean)
     .join('\n')
     .trim()
+  if (!raw) return ''
+  // r187：自带 summary 的 provider（litellm/deepseek 等）归一化后 message.text
+  // 与 summary 是同一段文本，而正文区（contentHtml）已渲染 message.text——
+  // 再渲染 summary 就会在同一块里同文出现两遍。与正文一致（压空白比对）时
+  // 跳过摘要段落；summary 与正文不同（真·摘要 + 原始思考）时仍两者都渲染。
+  const normalize = (value: string) => value.replace(/\s+/g, ' ').trim()
+  if (normalize(raw) === normalize(props.message.text ?? '')) return ''
+  return raw
 })
 </script>
 
