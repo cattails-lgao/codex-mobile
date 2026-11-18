@@ -57,6 +57,14 @@ app-server 物化后变成 `text: " "` 的 agentMessage。初查曾误判为「l
 前缀；④ litellm journald 该窗口无响应体日志（不佐证也不反证）。四者合围 ⇒ `msg_ft_` 只能来自线上回包，
 即 hslife。另注：同模型在 11-13/11-16 两个 rollout（共 148 轮）零空白 ⇒ 该行为是 hslife 侧**间歇性**的。
 
+**字节级实锤（当日 16:29–16:33 回环抓包，`/tmp/r189-capture.txt`，5 分钟 8 个请求）**：
+litellm→codex 的 SSE 流里 `response.output_item.done` 原样携带
+`{"id":"msg_ft_d675602b…","role":"assistant","content":[{"type":"output_text","text":" "}]}`，
+`"model":"gpt-6.1-sol"`；litellm 响应包装 id（base64）解码出上游原始
+**`response_id: resp_ft_d675602b…`** —— `ft` 前缀源自 hslife 回包 id，`msg_ft_*` 由其派生。
+窗口内 `" "` 空白 text 事件 84 次（另有大量 `......` 点阵占位文本，疑似 hslife 工具进度占位）。
+⇒ 从「排除法合围」升级为「线上实时字节级证明」，且证明该行为**此刻仍在发生**。
+
 ### 1.4 为什么渲染成空气泡而不是被收口
 
 客户端归一化链路对空白 agentMessage **没有过滤**（`toUiMessages` 的 agentMessage 分支无条件返回；
