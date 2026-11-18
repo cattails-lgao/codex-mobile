@@ -1568,3 +1568,36 @@ pnpm `auth.ini`（发 0.1.136 时用的那枚）与 `~/.npmrc` 里的另一枚�
 **仍未验**：round-186 本身的现场（客户端「结束了还 thinking」）未复现，本次只证「修复已在线上 + 服务健康」。要观察自动收口，需再遇到一次断线期间的 turn 完成，或用 CDP 人为断网造一次。
 
 详见 [round-186 §八](../rounds/round-186-stuck-thinking-reconcile.md)。
+
+
+## round-188 · 编辑器原地化 + 编辑保存 120s 超时 + 思考块同文去重（2026-10-29 会话；文档 2026-11-18 补档，未发版）
+
+**范围**：`6c882a8e`（编辑保存 120s 超时 + catch 兜底，App.vue +32/−2）· `20a863ec`（编辑器原地化，ThreadConversation.vue +52/−34）·
+`c548bf41`（思考块同文重复两层去重，ReasoningBlock.vue + useDesktopStateUtils.ts +42/−2）· `d1df78a9`（bump 0.1.138，**未发版**）。
+会话结束未写文档，2026-11-18 补档（[round-188](../rounds/round-188-edit-inplace-and-reasoning-dedupe.md)）。
+
+**补档验证**：`vue-tsc` 0 · 单测 **1113/1113 / 101 文件**（基线持平）。**补档补测**：`mergePersistedReasoning` 前置去重
+补一条用例（`2da8dad4`：互含丢弃 / 短文本豁免 / 跨轮豁免）。
+
+**诚实边界**：原地化编辑器无浏览器级验收；0.1.138 无 tag / Release / npm 版本。
+
+## round-189 · 空白 agentMessage 气泡过滤 —— 上游 provider「空格保活」条目（2026-11-18，未部署）
+
+**用户报障**：线上线程 `01a1d55e-e899-7b23-a6cc-becc1e241de8` 列表渲染出现空的
+`data-message-type="agentMessage"` 元素（过程区、message-text 只有一个空格 span）。
+
+**取证**：SSH 上服务器——11-13 rollout 干净（885 条 assistant message 无空白）；线程 11-18 被续写产生第二个
+rollout 文件，上游 provider（litellm 一类，`msg_ft_*` id、`content_item_kinds:["unknown"]`）在工具间隙吐 **44 条
+content 只有单空格的 assistant message**；线上 `thread/read {includeTurns:true}` 实测最新 10 轮页 63 条
+agentMessage **44 条空白**。渲染成空气泡的机制：`toUiMessages` agentMessage 分支无条件返回 +
+`isFinalAssistantItem` 的 `text.trim().length > 0` 把空白条目永久留在过程区。
+
+**改动**（`814cab6e`，4 文件 +44/−1）：`toUiMessages` 丢弃 trim 后为空的 agentMessage（resume/read/上翻/revert
+补水共享路径）+ `readAgentMessageCompleted` 不让空白 completed 进 live 列表。
+
+**验证**：`vue-tsc` 0 · 单测 **1115/1115 / 101 文件**（+2 例；首遍全量遇 vitest worker 启动超时的基础设施抖动，
+补跑全绿）。
+
+**诚实边界**：服务端 44 条空白仍在 rollout（其他客户端仍可见）；修复前保存的快照重开先画一次（不过归一化，
+RPC merge 后收敛）；live 流式中间态不拦；线上未部署（仍是 0.1.137），随 0.1.138 发版生效。
+详见 [round-189](../rounds/round-189-blank-agentmessage-filter.md)。
