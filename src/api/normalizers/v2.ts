@@ -484,7 +484,7 @@ export function toUiFileChanges(changes: unknown): UiFileChange[] {
 
 function toUiMessages(item: ThreadItem): UiMessage[] {
   if (item.type === 'agentMessage') {
-    // round-188：上游 provider（litellm 一类）会在工具调用间隙吐出 content 只有
+    // round-189：上游 provider（litellm 一类）会在工具调用间隙吐出 content 只有
     // 单个空格的 assistant message（线上 01a1d55e 实测：一次续写 44 条
     // text=" " 的 msg_ft_* 条目），app-server 物化成 text=" " 的 agentMessage。
     // 空白文本没有任何可渲染内容，且 `isFinalAssistantItem` 又因 trim 后为空

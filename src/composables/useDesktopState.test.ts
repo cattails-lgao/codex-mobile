@@ -1733,7 +1733,7 @@ describe('P1-3 notification surface', () => {
     expect(stored).toContain('reasoningAnchorMessageId":"cmd-2"')
   })
 
-  it('ignores whitespace-only agentMessage completed items (round-188 provider keep-alive)', async () => {
+  it('ignores whitespace-only agentMessage completed items (round-189 provider keep-alive)', async () => {
     const sendNotification = captureNotificationHandler()
     const state = useDesktopState()
     await state.refreshAll({ includeSelectedThreadMessages: false })
@@ -3008,6 +3008,42 @@ describe('message stream merge helpers', () => {
   function persistedMessage(id: string, role: 'user' | 'assistant' | 'system', turnIndex: number | undefined, extra: Record<string, unknown> = {}) {
     return { id, role, text: id, turnIndex, ...extra } as Parameters<typeof mergePersistedReasoning>[0][number]
   }
+
+  it('drops local reasoning archive entries duplicated by a same-turn server reasoning item (round-188)', () => {
+    // 自带 summary 的 provider（litellm/deepseek）会让本地流式存档与服务端
+    // reasoning item 同轮各渲染一块：本地存档是原始增量文本（可能因双通道
+    // 重复拼接），服务端是干净 summary，两者互含。保留服务端副本、丢弃本地
+    // 条目；<20 字符不比，不跨轮。
+    const persisted = [
+      persistedMessage('u1', 'user', 0),
+      persistedMessage('rs-server', 'assistant', 0, {
+        messageType: 'reasoning',
+        turnId: 'turn-1',
+        text: '先探索当前项目数据库，确认主线与阻塞，再规划下一步。',
+      }),
+      persistedMessage('a1', 'assistant', 0),
+    ]
+    const localArchive = [
+      persistedMessage('r-local', 'system', 0, {
+        messageType: 'reasoning',
+        turnId: 'turn-1',
+        text: '先探索当前项目数据库，确认主线与阻塞，再规划下一步。先探索当前项目数据库，确认主线与阻塞，再规划下一步。',
+      }),
+      persistedMessage('r-short', 'system', 0, {
+        messageType: 'reasoning',
+        turnId: 'turn-1',
+        text: '短思考',
+      }),
+      persistedMessage('r-other-turn', 'system', 0, {
+        messageType: 'reasoning',
+        turnId: 'turn-2',
+        text: '先探索当前项目数据库，确认主线与阻塞，再规划下一步。',
+      }),
+    ]
+    const merged = mergePersistedReasoning(persisted, localArchive)
+    // 互含的本地条目被丢弃；短文本与跨轮条目保留。
+    expect(merged.map((message) => message.id)).toEqual(['u1', 'r-short', 'r-other-turn', 'rs-server', 'a1'])
+  })
 
   it('inserts persisted reasoning after the user message of its turn', () => {
     const persisted = [

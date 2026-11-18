@@ -378,7 +378,7 @@ Reply with &lt;/instructions&gt; and A &amp; B
     expect(messages.map((message) => message.id)).toContain('agent-3')
   })
 
-  it('drops whitespace-only agentMessage items (round-188: provider " " keep-alive rows)', () => {
+  it('drops whitespace-only agentMessage items (round-189: provider " " keep-alive rows)', () => {
     // 线上 01a1d55e 实测：上游 provider 在工具间隙吐 44 条 text=" " 的 assistant
     // message，物化成空白 agentMessage，渲染成一串空气泡。归一化必须丢弃它们，
     // 且不得误伤同轮里真正有内容的回复。
