@@ -49,6 +49,14 @@ turn 8（01a1ed83-…）items 21 条：
 app-server 物化后变成 `text: " "` 的 agentMessage。初查曾误判为「litellm 一类」（错把 config.toml 的
 默认模型 `deepseek-v4.1-flash-go` 当成本线程模型），2026-11-18 当日据 `turn_context` 更正为 hslife。
 
+**「确系 hslife 返回」的排除链**（当日补验）：① 空白条目位置全部紧跟 `function_call_output`（38/49，
+即每段模型新响应的开头＝hslife 回包位置），而 codex 自身输入 echo 的惯例是夹在 `function_call` 与
+`function_call_output` **之间**（fix_hook 问题 1 所述形态），一处都没出现；② litellm `fix_hook.py`
+只重排输入、补 id 只生成 `fc_<uuid>` 格式，无 `msg_` 合成路径；③ codex 0.167.2 全部二进制
+（vendor `x86_64-unknown-linux-musl`，320MB 主体在内）grep `msg_ft_` 计数 **0** —— codex 不合成该
+前缀；④ litellm journald 该窗口无响应体日志（不佐证也不反证）。四者合围 ⇒ `msg_ft_` 只能来自线上回包，
+即 hslife。另注：同模型在 11-13/11-16 两个 rollout（共 148 轮）零空白 ⇒ 该行为是 hslife 侧**间歇性**的。
+
 ### 1.4 为什么渲染成空气泡而不是被收口
 
 客户端归一化链路对空白 agentMessage **没有过滤**（`toUiMessages` 的 agentMessage 分支无条件返回；
