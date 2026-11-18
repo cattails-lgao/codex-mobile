@@ -307,7 +307,9 @@ export function readAgentMessageCompleted(notification: RpcNotification): UiMess
     if (!item || item.type !== 'agentMessage') return null
     const id = readString(item.id)
     const text = readString(item.text)
-    if (!id || !text) return null
+    // round-188：空白文本（如上游 provider 吐的 " "）与缺文本同样不可渲染，
+    // 不进 live 列表——否则 turn 完成前的窗口里会闪出空气泡。
+    if (!id || !text.trim()) return null
     const turnId = readString(params.turnId) || readString(params.turn_id)
     return {
       id,

@@ -1733,6 +1733,26 @@ describe('P1-3 notification surface', () => {
     expect(stored).toContain('reasoningAnchorMessageId":"cmd-2"')
   })
 
+  it('ignores whitespace-only agentMessage completed items (round-188 provider keep-alive)', async () => {
+    const sendNotification = captureNotificationHandler()
+    const state = useDesktopState()
+    await state.refreshAll({ includeSelectedThreadMessages: false })
+    state.startPolling()
+    state.primeSelectedThread('thread-1')
+    sendNotification({
+      method: 'item/completed',
+      params: {
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        itemId: 'agent-blank',
+        item: { type: 'agentMessage', id: 'agent-blank', text: ' ' },
+      },
+    })
+    await Promise.resolve()
+
+    expect(state.messages.value.some((message) => message.id === 'agent-blank')).toBe(false)
+  })
+
   it('captures plan items from item/completed as live plan messages', async () => {
     const sendNotification = captureNotificationHandler()
     const state = useDesktopState()

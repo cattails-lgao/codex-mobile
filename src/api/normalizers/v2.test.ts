@@ -378,6 +378,20 @@ Reply with &lt;/instructions&gt; and A &amp; B
     expect(messages.map((message) => message.id)).toContain('agent-3')
   })
 
+  it('drops whitespace-only agentMessage items (round-188: provider " " keep-alive rows)', () => {
+    // 线上 01a1d55e 实测：上游 provider 在工具间隙吐 44 条 text=" " 的 assistant
+    // message，物化成空白 agentMessage，渲染成一串空气泡。归一化必须丢弃它们，
+    // 且不得误伤同轮里真正有内容的回复。
+    const messages = normalizeThreadMessagesV2(threadReadResponseWithContent([
+      { type: 'agentMessage', id: 'agent-blank-space', text: ' ', phase: null, memoryCitation: null, delivery: null, questions: null },
+      { type: 'agentMessage', id: 'agent-blank-empty', text: '', phase: null, memoryCitation: null, delivery: null, questions: null },
+      { type: 'agentMessage', id: 'agent-blank-newlines', text: ' \n\t ', phase: null, memoryCitation: null, delivery: null, questions: null },
+      { type: 'agentMessage', id: 'agent-real', text: 'real reply', phase: null, memoryCitation: null, delivery: null, questions: null },
+    ]))
+
+    expect(messages.map((message) => message.id)).toEqual(['agent-real'])
+  })
+
   it('moves the trailing compaction.done row after the turn user message (round-30)', () => {
     // 服务端把 contextCompaction 固定在 turn items 末尾，刷新后压缩块会跑到
     // 对话最后；归位后应紧跟该轮用户消息之后（压缩是 turn 边界动作）。
