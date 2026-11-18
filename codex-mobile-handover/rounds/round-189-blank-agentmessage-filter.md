@@ -42,8 +42,12 @@ turn 8（01a1ed83-…）items 21 条：
   "internal_chat_message_metadata_passthrough": { "turn_id": "01a1ed83-…", "content_item_kinds": ["unknown"] } }
 ```
 
-`msg_ft_` 前缀 + `content_item_kinds: ["unknown"]` ⇒ 上游 provider（litellm 一类代理）在工具调用间隙吐出的
-**空格保活/分隔 message**，被 codex 原样持久化。app-server 物化后变成 `text: " "` 的 agentMessage。
+上游链路（rollout `turn_context` 实测：本线程三个 rollout 全部 `model: gpt-6.1-sol`；litellm `/etc/litellm/config.yaml`
+里 `gpt-6.1-sol` → `os.environ/HS_LIFE_BASE_URL` 原生 Responses 透传）：
+**codex → litellm（本机网关）→ hslife `gpt-6.1-sol`**。`msg_ft_` 前缀 + `content_item_kinds: ["unknown"]` ⇒
+**hslife 上游**在工具调用间隙吐出的**空格保活/分隔 message**，litellm 原样透传、codex 原样持久化。
+app-server 物化后变成 `text: " "` 的 agentMessage。初查曾误判为「litellm 一类」（错把 config.toml 的
+默认模型 `deepseek-v4.1-flash-go` 当成本线程模型），2026-11-18 当日据 `turn_context` 更正为 hslife。
 
 ### 1.4 为什么渲染成空气泡而不是被收口
 

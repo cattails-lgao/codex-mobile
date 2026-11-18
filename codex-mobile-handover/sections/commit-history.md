@@ -1587,7 +1587,8 @@ pnpm `auth.ini`（发 0.1.136 时用的那枚）与 `~/.npmrc` 里的另一枚�
 `data-message-type="agentMessage"` 元素（过程区、message-text 只有一个空格 span）。
 
 **取证**：SSH 上服务器——11-13 rollout 干净（885 条 assistant message 无空白）；线程 11-18 被续写产生第二个
-rollout 文件，上游 provider（litellm 一类，`msg_ft_*` id、`content_item_kinds:["unknown"]`）在工具间隙吐 **44 条
+rollout 文件，上游 **hslife `gpt-6.1-sol`**（`turn_context` 全部记录该模型；litellm 该模型路由
+`HS_LIFE_BASE_URL` 原生透传，`msg_ft_*` id、`content_item_kinds:["unknown"]`）在工具间隙吐 **44 条
 content 只有单空格的 assistant message**；线上 `thread/read {includeTurns:true}` 实测最新 10 轮页 63 条
 agentMessage **44 条空白**。渲染成空气泡的机制：`toUiMessages` agentMessage 分支无条件返回 +
 `isFinalAssistantItem` 的 `text.trim().length > 0` 把空白条目永久留在过程区。
